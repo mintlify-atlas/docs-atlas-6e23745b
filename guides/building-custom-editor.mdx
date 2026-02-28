@@ -74,7 +74,7 @@ npm add remirror @remirror/react @remirror/pm @emotion/react @emotion/styled
     import { EditorComponent, Remirror, useRemirror } from '@remirror/react';
     import { BoldExtension } from 'remirror/extensions';
 
-    const Menu = () => <button onClick={() => alert('TBD')}>B</button>;
+    const Menu = () => <button onClick={() => console.log('Bold clicked')}>B</button>;
 
     export const MyEditor = () => {
       const { manager, state } = useRemirror({
