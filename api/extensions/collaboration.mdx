@@ -1,0 +1,380 @@
+---
+title: Collaboration Extensions
+description: Real-time collaboration with ProseMirror collab and Yjs
+---
+
+Collaboration extensions enable multiple users to edit the same document simultaneously.
+
+## CollaborationExtension
+
+ProseMirror-native collaboration using the `prosemirror-collab` package.
+
+### Installation
+
+```typescript
+import { CollaborationExtension } from 'remirror/extensions';
+
+const extensions = () => [new CollaborationExtension()];
+```
+
+### Options
+
+<ParamField path="version" type="number" default="0">
+  Initial document version number
+  
+  ```typescript
+  new CollaborationExtension({ version: 0 })
+  ```
+</ParamField>
+
+<ParamField path="clientID" type="string | number" required>
+  Unique identifier for this client
+  
+  ```typescript
+  new CollaborationExtension({ 
+    clientID: 'user-123' 
+  })
+  ```
+</ParamField>
+
+<ParamField path="debounceMs" type="number" default="250">
+  Debounce time for sending updates (milliseconds)
+  
+  ```typescript
+  new CollaborationExtension({ debounceMs: 100 })
+  ```
+</ParamField>
+
+<ParamField path="onSendableReceived" type="Handler<(props: OnSendableReceivedProps) => void>" required>
+  Callback when changes are ready to send to server
+  
+  ```typescript
+  new CollaborationExtension({
+    onSendableReceived: ({ sendable, jsonSendable }) => {
+      // Send jsonSendable to your server
+      socket.emit('changes', jsonSendable);
+    },
+  })
+  ```
+</ParamField>
+
+### Commands
+
+#### `sendCollaborationUpdate(attributes)`
+
+Receive and apply collaboration updates from the server.
+
+<ParamField path="attributes.version" type="number" required>
+  Document version these steps apply to
+</ParamField>
+
+<ParamField path="attributes.steps" type="StepWithClientId[]" required>
+  Array of ProseMirror steps to apply
+</ParamField>
+
+```typescript
+// Receive updates from server
+socket.on('changes', (data) => {
+  commands.sendCollaborationUpdate({
+    version: data.version,
+    steps: data.steps,
+  });
+});
+```
+
+#### `cancelSendableSteps()`
+
+Cancel pending debounced updates.
+
+```typescript
+commands.cancelSendableSteps();
+```
+
+#### `flushSendableSteps()`
+
+Immediately send pending updates without waiting for debounce.
+
+```typescript
+commands.flushSendableSteps();
+```
+
+---
+
+## Types
+
+### OnSendableReceivedProps
+
+```typescript
+interface OnSendableReceivedProps {
+  // Raw ProseMirror sendable
+  sendable: Sendable;
+  
+  // JSON-serializable version for network transfer
+  jsonSendable: JSONSendable;
+}
+
+interface Sendable {
+  version: number;
+  steps: readonly Step[];
+  clientID: number | string;
+  origins: readonly Transaction[];
+}
+
+interface JSONSendable {
+  version: number;
+  steps: Shape[]; // JSON-serialized steps
+  clientID: number | string;
+}
+```
+
+### CollaborationAttributes
+
+```typescript
+interface CollaborationAttributes {
+  // Steps from other clients
+  steps: StepWithClientId[];
+  
+  // Document version
+  version: number;
+}
+
+interface StepWithClientId extends Step {
+  clientID: number | string;
+}
+```
+
+---
+
+## Usage Example
+
+### Client Setup
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { CollaborationExtension } from 'remirror/extensions';
+import { io } from 'socket.io-client';
+import { useEffect, useState } from 'react';
+
+function CollaborativeEditor() {
+  const [socket] = useState(() => io('http://localhost:3000'));
+  const [version, setVersion] = useState(0);
+  
+  const { manager } = useRemirror({
+    extensions: () => [
+      new CollaborationExtension({
+        version,
+        clientID: Math.random().toString(36),
+        debounceMs: 250,
+        
+        // Send local changes to server
+        onSendableReceived: ({ jsonSendable }) => {
+          socket.emit('changes', jsonSendable);
+        },
+      }),
+    ],
+  });
+
+  useEffect(() => {
+    // Receive changes from server
+    socket.on('changes', (data) => {
+      manager.commands.sendCollaborationUpdate({
+        version: data.version,
+        steps: data.steps,
+      });
+      setVersion(data.version + data.steps.length);
+    });
+
+    return () => {
+      socket.off('changes');
+    };
+  }, [socket, manager]);
+
+  return <Remirror manager={manager} />;
+}
+```
+
+### Server Setup (Node.js)
+
+```javascript
+const io = require('socket.io')(3000);
+const { Step } = require('prosemirror-transform');
+
+let document = null;
+let version = 0;
+const steps = [];
+
+io.on('connection', (socket) => {
+  // Send current state to new client
+  socket.emit('init', { document, version });
+
+  // Receive changes from client
+  socket.on('changes', (data) => {
+    if (data.version !== version) {
+      // Version mismatch - send missing steps
+      const missedSteps = steps.slice(data.version);
+      socket.emit('changes', {
+        version,
+        steps: missedSteps,
+      });
+      return;
+    }
+
+    // Apply and broadcast changes
+    steps.push(...data.steps);
+    version += data.steps.length;
+
+    // Broadcast to all other clients
+    socket.broadcast.emit('changes', data);
+  });
+});
+```
+
+---
+
+## YjsExtension
+
+Alternative collaboration using Yjs for improved conflict resolution.
+
+### Installation
+
+```typescript
+import { YjsExtension } from 'remirror/extensions';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+
+const ydoc = new Y.Doc();
+const provider = new WebsocketProvider(
+  'ws://localhost:1234',
+  'room-name',
+  ydoc
+);
+
+const extensions = () => [
+  new YjsExtension({
+    getProvider: () => provider,
+  }),
+];
+```
+
+### Options
+
+<ParamField path="getProvider" type="() => Provider" required>
+  Function returning Yjs provider instance
+</ParamField>
+
+<ParamField path="getXmlFragment" type="(doc: Y.Doc) => Y.XmlFragment">
+  Custom XML fragment getter
+</ParamField>
+
+### Benefits over CollaborationExtension
+
+- **Better conflict resolution** - Yjs uses CRDT algorithm
+- **Offline support** - Changes sync when reconnected
+- **Easier server setup** - Less server-side logic needed
+- **Rich ecosystem** - Many Yjs providers available
+
+### Usage Example
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { YjsExtension } from 'remirror/extensions';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { useMemo } from 'react';
+
+function YjsEditor() {
+  const { ydoc, provider } = useMemo(() => {
+    const ydoc = new Y.Doc();
+    const provider = new WebsocketProvider(
+      'ws://localhost:1234',
+      'my-room',
+      ydoc
+    );
+    return { ydoc, provider };
+  }, []);
+
+  const { manager } = useRemirror({
+    extensions: () => [
+      new YjsExtension({
+        getProvider: () => provider,
+      }),
+    ],
+  });
+
+  return <Remirror manager={manager} />;
+}
+```
+
+---
+
+## Choosing Between CollaborationExtension and YjsExtension
+
+<Tabs>
+  <Tab title="CollaborationExtension">
+    **Use when:**
+    - You need full control over server logic
+    - Working with existing ProseMirror collab server
+    - Simple collaboration requirements
+    - Minimal dependencies preferred
+    
+    **Pros:**
+    - Native ProseMirror implementation
+    - Smaller bundle size
+    - More direct control
+    
+    **Cons:**
+    - More server complexity
+    - Manual conflict handling
+    - No offline support
+  </Tab>
+  
+  <Tab title="YjsExtension">
+    **Use when:**
+    - Need robust conflict resolution
+    - Want offline editing support
+    - Multiple sync providers (WebSocket, WebRTC, etc.)
+    - Building production collaboration
+    
+    **Pros:**
+    - CRDT-based (better conflicts)
+    - Offline-first
+    - Easier server setup
+    - Rich provider ecosystem
+    
+    **Cons:**
+    - Larger bundle size
+    - Additional dependencies
+    - Different mental model
+  </Tab>
+</Tabs>
+
+---
+
+## Awareness & Cursors
+
+For showing other users' cursors and selections:
+
+```typescript
+import { YjsExtension } from 'remirror/extensions';
+import * as awarenessProtocol from 'y-protocols/awareness';
+
+const awareness = provider.awareness;
+
+// Set local user info
+awareness.setLocalStateField('user', {
+  name: 'John Doe',
+  color: '#ff0000',
+});
+
+// Listen to awareness changes
+awareness.on('change', (changes) => {
+  // Update UI with other users' cursors
+});
+```
+
+---
+
+## Related
+
+- [History Extension](/api/extensions/overview#utilities)
+- [Events Extension](/api/extensions/overview#utilities)

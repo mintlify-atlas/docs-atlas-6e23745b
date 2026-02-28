@@ -1,0 +1,472 @@
+---
+title: 'WYSIWYG Preset'
+description: 'Complete WYSIWYG editor preset with rich formatting, lists, images, links, and code blocks'
+---
+
+## Overview
+
+The `wysiwygPreset` provides a comprehensive collection of extensions for building a full-featured WYSIWYG (What You See Is What You Get) editor. It includes all the essential extensions for rich text editing, including formatting marks, block nodes, lists, images, links, and code blocks.
+
+## Installation
+
+```bash
+npm install @remirror/preset-wysiwyg
+```
+
+## Usage
+
+<CodeGroup>
+```typescript Basic Usage
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create(() => [
+  ...wysiwygPreset(),
+  // your other extensions
+]);
+```
+
+```typescript With Options
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+
+const extensions = wysiwygPreset({
+  // Heading options
+  levels: [1, 2, 3, 4],
+  defaultLevel: 1,
+  
+  // Link options
+  selectTextOnClick: true,
+  
+  // Code block options
+  defaultLanguage: 'typescript',
+  syntaxTheme: 'base16_ateliersulphurpool_light',
+  
+  // Drop cursor options
+  color: '#3b82f6',
+  width: 2,
+});
+```
+
+```typescript Complete Editor
+import { corePreset } from '@remirror/preset-core';
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create(() => [
+  ...corePreset(),
+  ...wysiwygPreset(),
+]);
+```
+</CodeGroup>
+
+## Included Extensions
+
+The WYSIWYG preset includes the following extensions:
+
+### Plain Extensions
+
+#### BidiExtension
+
+Bidirectional text support for languages like Arabic and Hebrew.
+
+**Features:**
+- Auto-detection of text direction
+- RTL and LTR support
+- Per-node direction
+
+#### DropCursorExtension
+
+Visual cursor indicator when dragging content.
+
+**Features:**
+- Customizable color and width
+- Drag-and-drop visual feedback
+
+#### GapCursorExtension
+
+Enables cursor placement in gaps between nodes.
+
+**Features:**
+- Cursor in empty spaces
+- Better node navigation
+
+#### FindExtension
+
+Find and replace functionality.
+
+**Features:**
+- Text search
+- Find and replace
+- Case-sensitive search
+- Regular expression support
+
+#### ShortcutsExtension
+
+Keyboard shortcuts for common formatting operations.
+
+**Features:**
+- Configurable keyboard shortcuts
+- Common editing shortcuts
+
+#### TrailingNodeExtension
+
+Ensures there's always a trailing paragraph at the end of the document.
+
+**Features:**
+- Auto-insert trailing node
+- Configurable node type
+- Better UX for cursor placement
+
+### Node Extensions
+
+#### HardBreakExtension
+
+Line breaks within paragraphs (Shift+Enter).
+
+**Features:**
+- Line breaks without new paragraphs
+- Shift+Enter shortcut
+
+#### ImageExtension
+
+Embed images in the editor.
+
+**Features:**
+- Image insertion
+- Resize support
+- Alt text
+- URL or upload
+
+#### HorizontalRuleExtension
+
+Horizontal divider lines.
+
+**Features:**
+- Visual separators
+- Keyboard shortcuts
+
+#### BlockquoteExtension
+
+Quotation blocks.
+
+**Features:**
+- Blockquote nodes
+- Keyboard shortcuts
+- Nested content
+
+#### CodeBlockExtension
+
+Code blocks with syntax highlighting.
+
+**Features:**
+- Syntax highlighting
+- Language selection
+- Line numbers (optional)
+- Multiple themes
+- 100+ languages supported
+
+#### HeadingExtension
+
+Heading nodes (h1-h6).
+
+**Features:**
+- Six heading levels
+- Configurable levels
+- Keyboard shortcuts
+
+#### IframeExtension
+
+Embed iframes (videos, embeds).
+
+**Features:**
+- Iframe embedding
+- YouTube, Vimeo support
+- Custom embeds
+
+#### List Extensions
+
+Three list types: bullet lists, ordered lists, and task lists.
+
+**BulletListExtension:**
+- Unordered lists
+- Nested lists
+- Keyboard shortcuts
+
+**OrderedListExtension:**
+- Numbered lists
+- Nested lists
+- Custom start numbers
+
+**TaskListExtension:**
+- Checkable task items
+- Todo lists
+- Checkbox interaction
+
+### Mark Extensions
+
+#### BoldExtension
+
+Bold text formatting.
+
+**Features:**
+- Mod-b shortcut
+- Configurable weight
+
+#### CodeExtension
+
+Inline code marks.
+
+**Features:**
+- Inline code styling
+- Monospace font
+
+#### StrikeExtension
+
+Strikethrough text.
+
+**Features:**
+- Strikethrough mark
+- Keyboard shortcuts
+
+#### ItalicExtension
+
+Italic text formatting.
+
+**Features:**
+- Mod-i shortcut
+- Emphasis styling
+
+#### LinkExtension
+
+Hyperlinks with auto-linking support.
+
+**Features:**
+- URL links
+- Auto-linking
+- Click to edit
+- Link preview
+
+#### UnderlineExtension
+
+Underlined text.
+
+**Features:**
+- Mod-u shortcut
+- Underline mark
+
+## Options
+
+The WYSIWYG preset accepts options for all included extensions:
+
+### Bidi Options
+
+<ParamField path="autoUpdate" type="boolean">
+  Automatically update text direction when content changes.
+</ParamField>
+
+<ParamField path="defaultDirection" type="'ltr' | 'rtl'">
+  Default text direction for the editor.
+</ParamField>
+
+<ParamField path="excludeNodes" type="string[]">
+  Node types to exclude from bidirectional text handling.
+</ParamField>
+
+### Bold Options
+
+<ParamField path="weight" type="string">
+  CSS font-weight value for bold text. Defaults to 'bold' or '700'.
+</ParamField>
+
+### Code Block Options
+
+<ParamField path="defaultLanguage" type="string">
+  Default programming language for code blocks.
+  
+  **Example:** `'typescript'`, `'javascript'`, `'python'`
+</ParamField>
+
+<ParamField path="formatter" type="CodeBlockFormatter">
+  Custom code formatter function.
+</ParamField>
+
+<ParamField path="toggleName" type="string">
+  Name of the toggle command for code blocks.
+</ParamField>
+
+<ParamField path="syntaxTheme" type="string">
+  Syntax highlighting theme name.
+  
+  **Popular themes:**
+  - `'base16_ateliersulphurpool_light'`
+  - `'dracula'`
+  - `'github'`
+  - `'monokai'`
+</ParamField>
+
+<ParamField path="supportedLanguages" type="string[]">
+  Array of supported language identifiers.
+</ParamField>
+
+### Drop Cursor Options
+
+<ParamField path="color" type="string">
+  Color of the drop cursor indicator.
+  
+  **Example:** `'#3b82f6'`, `'blue'`
+</ParamField>
+
+<ParamField path="width" type="number">
+  Width of the drop cursor in pixels.
+</ParamField>
+
+### Find Options
+
+<ParamField path="alwaysFind" type="boolean">
+  Always show find decorations, even when not actively searching.
+</ParamField>
+
+### Heading Options
+
+<ParamField path="levels" type="number[]">
+  Array of heading levels to enable (1-6).
+  
+  **Example:** `[1, 2, 3, 4]` enables h1 through h4
+</ParamField>
+
+<ParamField path="defaultLevel" type="number">
+  Default heading level when creating new headings.
+</ParamField>
+
+### Link Options
+
+<ParamField path="selectTextOnClick" type="boolean">
+  Whether to select link text when clicking on a link.
+</ParamField>
+
+### Trailing Node Options
+
+<ParamField path="disableTags" type="string[]">
+  HTML tags where trailing node should be disabled.
+</ParamField>
+
+<ParamField path="ignoredNodes" type="string[]">
+  Node types to ignore when checking for trailing node.
+</ParamField>
+
+<ParamField path="nodeName" type="string">
+  Name of the node type to use as trailing node. Defaults to 'paragraph'.
+</ParamField>
+
+## Examples
+
+### Custom Heading Levels
+
+```typescript
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+
+const extensions = wysiwygPreset({
+  levels: [1, 2, 3], // Only h1, h2, h3
+  defaultLevel: 2,   // Default to h2
+});
+```
+
+### Code Block with Syntax Highlighting
+
+```typescript
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+
+const extensions = wysiwygPreset({
+  defaultLanguage: 'typescript',
+  syntaxTheme: 'dracula',
+  supportedLanguages: ['typescript', 'javascript', 'python', 'rust'],
+});
+```
+
+### Custom Drop Cursor
+
+```typescript
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+
+const extensions = wysiwygPreset({
+  color: '#10b981',
+  width: 3,
+});
+```
+
+### RTL Support
+
+```typescript
+import { wysiwygPreset } from '@remirror/preset-wysiwyg';
+
+const extensions = wysiwygPreset({
+  autoUpdate: true,
+  defaultDirection: 'rtl',
+});
+```
+
+## API Reference
+
+### wysiwygPreset()
+
+Creates an array of WYSIWYG extensions with optional configuration.
+
+**Signature:**
+```typescript
+function wysiwygPreset(
+  options?: GetStaticAndDynamic<WysiwygOptions>
+): WysiwygPreset[];
+```
+
+**Returns:** Array of extension instances
+
+## TypeScript
+
+### WysiwygOptions
+
+```typescript
+interface WysiwygOptions
+  extends BidiOptions,
+          BoldOptions,
+          CodeBlockOptions,
+          DropCursorOptions,
+          FindOptions,
+          HeadingOptions,
+          LinkOptions,
+          TrailingNodeOptions {}
+```
+
+### WysiwygPreset
+
+```typescript
+type WysiwygPreset =
+  | GapCursorExtension
+  | HardBreakExtension
+  | HorizontalRuleExtension
+  | ImageExtension
+  | ItalicExtension
+  | StrikeExtension
+  | UnderlineExtension
+  | BlockquoteExtension
+  | CodeExtension
+  | LinkExtension
+  | BidiExtension
+  | BoldExtension
+  | CodeBlockExtension
+  | DropCursorExtension
+  | HeadingExtension
+  | FindExtension
+  | TrailingNodeExtension
+  | IframeExtension
+  | BulletListExtension
+  | OrderedListExtension
+  | TaskListExtension
+  | ShortcutsExtension;
+```
+
+## Related
+
+- [Core Preset](/api/presets/core) - Essential editor functionality
+- [Formatting Preset](/api/presets/formatting) - Advanced text formatting
+- [CodeBlock Extension](/api/extensions/code-block)
+- [Link Extension](/api/extensions/link)

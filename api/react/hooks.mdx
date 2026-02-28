@@ -1,0 +1,592 @@
+---
+title: React Hooks
+description: Complete reference for all React hooks available in Remirror for building rich text editors
+---
+
+# React Hooks
+
+Remirror provides a comprehensive set of React hooks for accessing editor functionality, managing state, and responding to editor events.
+
+## Core Hooks
+
+### useRemirror
+
+A hook that replaces the `<Remirror />` component and gives you total control of the editor you can create.
+
+```tsx
+import { useRemirror } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const Editor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+    content: '<p>Initial content</p>',
+    stringHandler: 'html',
+  });
+
+  return <Remirror manager={manager} state={state} />;
+};
+```
+
+<ParamField path="props" type="UseRemirrorProps<Extension>" optional>
+  Configuration options for the editor
+
+  <ParamField path="extensions" type="(() => Extension[]) | RemirrorManager" optional>
+    Provide a function that returns an array of extensions or a manager instance
+  </ParamField>
+
+  <ParamField path="content" type="string | RemirrorJSON | ProsemirrorNode" optional>
+    Initial editor content
+  </ParamField>
+
+  <ParamField path="selection" type="Selection | PrimitiveSelection" optional>
+    Initial selection position
+  </ParamField>
+
+  <ParamField path="stringHandler" type="keyof Remirror.StringHandlers | StringHandler" optional>
+    A function which transforms a string into a prosemirror node (e.g., 'html', 'markdown')
+  </ParamField>
+
+  <ParamField path="onError" type="InvalidContentHandler" optional>
+    Called when the editor has invalid content
+  </ParamField>
+</ParamField>
+
+<ResponseField name="manager" type="RemirrorManager<Extension>">
+  The manager required by the `<Remirror />` component
+</ResponseField>
+
+<ResponseField name="state" type="EditorState">
+  The initial editor state based on provided content and selection
+</ResponseField>
+
+<ResponseField name="setState" type="(state: EditorState) => void">
+  A function to update the state when making the editor controlled
+</ResponseField>
+
+<ResponseField name="onChange" type="RemirrorEventListener<Extension>">
+  Syntactic sugar for using setState directly on the `<Remirror />` component
+</ResponseField>
+
+<ResponseField name="getContext" type="() => ReactFrameworkOutput<Extension> | undefined">
+  Provides the editor context (only available after `<Remirror />` is mounted)
+</ResponseField>
+
+---
+
+### useRemirrorContext
+
+Provides access to the Remirror context when using the `<Remirror />` component.
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorButton = () => {
+  const { commands, active } = useRemirrorContext({ autoUpdate: true });
+
+  return (
+    <button 
+      onClick={() => commands.toggleBold()}
+      style={{ fontWeight: active.bold() ? 'bold' : 'normal' }}
+    >
+      Bold
+    </button>
+  );
+};
+```
+
+<ParamField path="handler" type="RemirrorEventListener | { autoUpdate: boolean }" optional>
+  Optional change handler or configuration object
+  
+  - Pass `{ autoUpdate: true }` to re-render on every editor update
+  - Pass a function to selectively re-render based on custom logic
+  - Omit for no automatic re-rendering (best performance)
+</ParamField>
+
+<ResponseField name="returns" type="ReactFrameworkOutput<Extension>">
+  The complete Remirror context including commands, helpers, active states, and more
+</ResponseField>
+
+---
+
+## Command Hooks
+
+### useCommands
+
+Provides access to all available editor commands.
+
+```tsx
+import { useCommands } from '@remirror/react';
+
+const EditorButton = () => {
+  const commands = useCommands();
+
+  return (
+    <button onClick={() => commands.toggleBold()}>
+      Toggle Bold
+    </button>
+  );
+};
+```
+
+<ResponseField name="returns" type="CommandsFromExtensions<Extension>">
+  Object containing all commands from installed extensions
+</ResponseField>
+
+---
+
+### useChainedCommands
+
+Provides access to chainable commands for executing multiple commands in sequence.
+
+```tsx
+import { useChainedCommands } from '@remirror/react';
+
+const EditorButton = () => {
+  const chain = useChainedCommands();
+
+  return (
+    <button onClick={() => chain.toggleBold().toggleItalic().run()}>
+      Bold & Italic
+    </button>
+  );
+};
+```
+
+<ResponseField name="returns" type="ChainedFromExtensions<Extension>">
+  Chainable command interface - call `.run()` to execute the chain
+</ResponseField>
+
+---
+
+### useHelpers
+
+Provides access to helper methods for querying editor state.
+
+```tsx
+import { useHelpers } from '@remirror/react';
+
+const WordCounter = () => {
+  const helpers = useHelpers(true); // Pass true to auto-update
+  const { getTextBetween } = helpers;
+
+  return <div>Content: {getTextBetween(0, 100)}</div>;
+};
+```
+
+<ParamField path="update" type="boolean" default="false">
+  Set to true to re-render component on every editor update
+</ParamField>
+
+<ResponseField name="returns" type="HelpersFromExtensions<Extension>">
+  Object containing all helper methods from installed extensions
+</ResponseField>
+
+---
+
+## State Hooks
+
+### useActive
+
+Returns the active states for marks and nodes at the current selection.
+
+```tsx
+import { useActive } from '@remirror/react';
+
+const BoldButton = () => {
+  const active = useActive();
+
+  return (
+    <button style={{ fontWeight: active.bold() ? 'bold' : 'normal' }}>
+      B
+    </button>
+  );
+};
+```
+
+<ParamField path="autoUpdate" type="boolean" default="true">
+  Set to false to prevent automatic re-rendering on every state update
+</ParamField>
+
+<ResponseField name="returns" type="ActiveFromExtensions<Extension>">
+  Object with methods to check if marks/nodes are active at current selection
+</ResponseField>
+
+---
+
+### useAttrs
+
+Provides access to attributes of nodes and marks at the current selection.
+
+```tsx
+import { useAttrs } from '@remirror/react';
+
+const LinkDisplay = () => {
+  const attrs = useAttrs();
+  const { link } = attrs;
+
+  return link?.href ? <a href={link.href}>{link.href}</a> : null;
+};
+```
+
+<ParamField path="update" type="boolean" default="false">
+  Set to true to re-render component on every editor update
+</ParamField>
+
+<ResponseField name="returns" type="AttrsFromExtensions<Extension>">
+  Object containing attributes for all marks and nodes
+</ResponseField>
+
+---
+
+### useEditorState
+
+Provides the latest editor state, updating on every state change.
+
+```tsx
+import { useEditorState } from '@remirror/react';
+
+const StateInspector = () => {
+  const state = useEditorState();
+
+  return <div>Selection: {state.selection.from} - {state.selection.to}</div>;
+};
+```
+
+<ResponseField name="returns" type="EditorState">
+  The current ProseMirror EditorState
+</ResponseField>
+
+---
+
+### useEditorView
+
+Provides access to the ProseMirror EditorView instance.
+
+```tsx
+import { useEditorView } from '@remirror/react';
+
+const ViewComponent = () => {
+  const view = useEditorView();
+
+  const focusEditor = () => view.focus();
+
+  return <button onClick={focusEditor}>Focus Editor</button>;
+};
+```
+
+<ResponseField name="returns" type="EditorView">
+  The ProseMirror EditorView instance
+</ResponseField>
+
+---
+
+### useCurrentSelection
+
+Returns the current selection, updating on every selection change.
+
+```tsx
+import { useCurrentSelection } from '@remirror/react';
+
+const SelectionDisplay = () => {
+  const selection = useCurrentSelection();
+
+  return <div>From: {selection.from}, To: {selection.to}</div>;
+};
+```
+
+<ResponseField name="returns" type="Selection">
+  The current ProseMirror Selection
+</ResponseField>
+
+---
+
+### useSelectedText
+
+Returns the currently selected text.
+
+```tsx
+import { useSelectedText } from '@remirror/react';
+
+const SelectedTextDisplay = () => {
+  const text = useSelectedText();
+
+  return text ? <span>Selected: {text}</span> : null;
+};
+```
+
+<ResponseField name="returns" type="string | undefined">
+  The selected text, or undefined if selection is empty
+</ResponseField>
+
+---
+
+## Extension Hooks
+
+### useExtension
+
+Dynamically update extension properties or get an extension instance.
+
+<Tabs>
+  <Tab title="Get Instance">
+    ```tsx
+    import { useExtension } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    const Editor = () => {
+      const boldExtension = useExtension(BoldExtension);
+      boldExtension.setOptions({ weight: '800' });
+      return null;
+    };
+    ```
+  </Tab>
+
+  <Tab title="Update Options">
+    ```tsx
+    import { useExtension } from '@remirror/react';
+    import { PlaceholderExtension } from 'remirror/extensions';
+
+    const EditorPlaceholder = ({ placeholder }) => {
+      useExtension(PlaceholderExtension, { placeholder });
+      return null;
+    };
+    ```
+  </Tab>
+
+  <Tab title="Add Handlers">
+    ```tsx
+    import { useCallback } from 'react';
+    import { useExtension } from '@remirror/react';
+    import { HistoryExtension } from 'remirror/extensions';
+
+    const Editor = () => {
+      useExtension(
+        HistoryExtension,
+        useCallback(({ addHandler }) => {
+          return addHandler('onRedo', () => console.log('redo'));
+        }, []),
+      );
+      return null;
+    };
+    ```
+  </Tab>
+</Tabs>
+
+<ParamField path="Constructor" type="AnyExtensionConstructor" required>
+  The extension constructor
+</ParamField>
+
+<ParamField path="optionsOrCallback" type="DynamicOptions | UseExtensionCallback" optional>
+  Either dynamic options to update or a callback for adding handlers
+</ParamField>
+
+<ParamField path="dependencies" type="DependencyList" optional>
+  React dependencies array (only used with callback signature)
+</ParamField>
+
+---
+
+### useExtensionEvent
+
+Add event handlers to an extension.
+
+```tsx
+import { useCallback } from 'react';
+import { useExtensionEvent } from '@remirror/react';
+import { HistoryExtension } from 'remirror/extensions';
+
+const RedoLogger = () => {
+  useExtensionEvent(
+    HistoryExtension,
+    'onRedo',
+    useCallback(() => console.log('redo occurred'), []),
+  );
+
+  return null;
+};
+```
+
+<ParamField path="extension" type="AnyExtensionConstructor" required>
+  The extension constructor
+</ParamField>
+
+<ParamField path="event" type="string" required>
+  The event name to listen to
+</ParamField>
+
+<ParamField path="memoizedHandler" type="Handler" required>
+  The memoized event handler function
+</ParamField>
+
+---
+
+### useHasExtension
+
+Check if an extension is present in the manager.
+
+```tsx
+import { useHasExtension } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const BoldChecker = () => {
+  const hasBold = useHasExtension(BoldExtension);
+
+  return <div>Bold extension: {hasBold ? 'installed' : 'not installed'}</div>;
+};
+```
+
+<ParamField path="Constructor" type="AnyExtensionConstructor" required>
+  The extension constructor to check for
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  True if the extension is present in the manager
+</ResponseField>
+
+---
+
+## Event Hooks
+
+### useDocChanged
+
+Subscribe to document change events.
+
+```tsx
+import { useDocChanged } from '@remirror/react';
+
+const ChangeLogger = () => {
+  useDocChanged(({ state }) => {
+    console.log('Document changed:', state.doc);
+  });
+
+  return null;
+};
+```
+
+<ParamField path="handler" type="DocChangedHandler" required>
+  Function called when the document changes
+</ParamField>
+
+---
+
+## Utility Hooks
+
+### useEditorDomRef
+
+Provides a React ref wrapper for the editor DOM element.
+
+```tsx
+import { useEditorDomRef } from '@remirror/react';
+
+const EditorComponent = () => {
+  const editorRef = useEditorDomRef();
+
+  const scrollToTop = () => {
+    editorRef.current?.scrollTo({ top: 0 });
+  };
+
+  return <button onClick={scrollToTop}>Scroll to Top</button>;
+};
+```
+
+<ResponseField name="returns" type="MutableRefObject<HTMLElement>">
+  A React ref pointing to the editor DOM element
+</ResponseField>
+
+---
+
+### usePortalContainer
+
+Provides access to the portal container for rendering React components within the editor DOM.
+
+```tsx
+import { usePortalContainer } from '@remirror/react';
+
+const CustomComponent = () => {
+  const portalContainer = usePortalContainer();
+  // Use portal container for advanced rendering
+  return null;
+};
+```
+
+<ResponseField name="returns" type="PortalContainer">
+  The portal container instance
+</ResponseField>
+
+---
+
+### useMarkRange
+
+Returns the selected range of a specific mark type.
+
+```tsx
+import { useMarkRange } from '@remirror/react';
+
+const LinkRangeDisplay = () => {
+  const linkRange = useMarkRange('link');
+
+  return linkRange ? (
+    <div>
+      Link from {linkRange.from} to {linkRange.to}
+    </div>
+  ) : null;
+};
+```
+
+<ParamField path="type" type="string" required>
+  The mark type to get the range for
+</ParamField>
+
+<ResponseField name="returns" type="GetMarkRange | undefined">
+  The mark range if found, undefined otherwise
+</ResponseField>
+
+---
+
+### useI18n
+
+Provides access to the internationalization formatter.
+
+```tsx
+import { useI18n } from '@remirror/react';
+
+const TranslatedComponent = () => {
+  const t = useI18n();
+  const message = t({ id: 'editor.bold', message: 'Bold' });
+
+  return <button>{message}</button>;
+};
+```
+
+<ResponseField name="returns" type="I18nFormatter">
+  The i18n formatter function
+</ResponseField>
+
+---
+
+### useManager
+
+Creates an editor manager directly in a React component. This is an internal hook primarily used by `useRemirror`.
+
+```tsx
+import { useManager } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const Editor = () => {
+  const manager = useManager(() => [new BoldExtension()]);
+
+  return <Remirror manager={manager} />;
+};
+```
+
+<ParamField path="extensions" type="(() => Extension[]) | RemirrorManager" required>
+  Function returning extensions array or manager instance
+</ParamField>
+
+<ParamField path="options" type="CreateReactManagerOptions" optional>
+  Manager configuration options
+</ParamField>
+
+<ResponseField name="returns" type="RemirrorManager<ReactExtensions<Extension>>">
+  The created manager instance
+</ResponseField>

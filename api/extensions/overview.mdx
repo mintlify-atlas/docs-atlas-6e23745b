@@ -1,0 +1,206 @@
+---
+title: Extensions Overview
+description: Complete guide to all 56+ Remirror extensions for building rich text editors
+---
+
+Remirror provides a comprehensive collection of extensions that add specific functionality to your editor. Each extension can be composed together to create powerful editing experiences.
+
+## What are Extensions?
+
+Extensions are the building blocks of Remirror editors. They:
+- Define document schema (nodes and marks)
+- Provide commands for content manipulation
+- Handle keyboard shortcuts and input rules
+- Add paste handling and event listeners
+- Enable collaborative editing features
+
+## Extension Categories
+
+<CardGroup cols={2}>
+  <Card title="Text Formatting" icon="bold" href="/api/extensions/text-formatting">
+    Bold, italic, underline, strikethrough, and text styling marks
+  </Card>
+  
+  <Card title="Block Elements" icon="paragraph" href="/api/extensions/block-elements">
+    Headings, paragraphs, blockquotes, and structural nodes
+  </Card>
+  
+  <Card title="Lists" icon="list" href="/api/extensions/lists">
+    Bullet lists, ordered lists, and task lists
+  </Card>
+  
+  <Card title="Tables" icon="table" href="/api/extensions/tables">
+    Full-featured table support with cell merging and resizing
+  </Card>
+  
+  <Card title="Collaboration" icon="users" href="/api/extensions/collaboration">
+    Real-time collaboration with Yjs and conflict resolution
+  </Card>
+  
+  <Card title="Markdown" icon="markdown" href="/api/extensions/markdown">
+    Markdown parsing and serialization
+  </Card>
+  
+  <Card title="Code" icon="code" href="/api/extensions/code">
+    Inline code and code blocks with syntax highlighting
+  </Card>
+</CardGroup>
+
+## Complete Extension List
+
+### Text Formatting
+- **BoldExtension** - Bold text formatting
+- **ItalicExtension** - Italic text styling
+- **UnderlineExtension** - Underline text
+- **StrikeExtension** - Strikethrough text
+- **CodeExtension** - Inline code marks
+- **TextColorExtension** - Text color styling
+- **TextHighlightExtension** - Text background highlighting
+- **FontSizeExtension** - Font size control
+- **FontFamilyExtension** - Font family selection
+- **TextCaseExtension** - Text case transformation
+- **SubExtension** - Subscript text
+- **SupExtension** - Superscript text
+
+### Block Elements
+- **ParagraphExtension** - Standard paragraph blocks
+- **HeadingExtension** - Headings (H1-H6)
+- **BlockquoteExtension** - Quote blocks
+- **HorizontalRuleExtension** - Horizontal dividers
+- **CalloutExtension** - Info/warning callout boxes
+- **DocExtension** - Root document node
+- **TextExtension** - Text node definition
+
+### Lists
+- **BulletListExtension** - Unordered lists
+- **OrderedListExtension** - Numbered lists
+- **TaskListExtension** - Checkable task lists
+- **ListItemExtension** - List item nodes
+
+### Tables
+- **TableExtension** - Complete table support
+- **TableRowExtension** - Table row nodes
+- **TableCellExtension** - Table cell nodes
+- **TableHeaderCellExtension** - Header cell nodes
+- **ReactTablesExtension** - React-specific table features
+
+### Media & Embeds
+- **ImageExtension** - Image insertion and display
+- **EmbedExtension** - External content embedding
+- **FileExtension** - File attachment handling
+
+### Links & References
+- **LinkExtension** - Hyperlink support with auto-linking
+- **MentionExtension** - @mention functionality
+- **MentionAtomExtension** - Atomic mention nodes
+- **EntityReferenceExtension** - Entity references
+
+### Code & Syntax
+- **CodeExtension** - Inline code marks
+- **CodeBlockExtension** - Multi-line code blocks
+- **Codemirror5Extension** - CodeMirror 5 integration
+- **Codemirror6Extension** - CodeMirror 6 integration
+
+### Collaboration
+- **CollaborationExtension** - ProseMirror collab
+- **YjsExtension** - Yjs-based real-time collaboration
+
+### Markdown
+- **MarkdownExtension** - Markdown import/export
+
+### Utilities
+- **HistoryExtension** - Undo/redo functionality
+- **PlaceholderExtension** - Placeholder text display
+- **DropCursorExtension** - Drag-and-drop cursor
+- **GapCursorExtension** - Gap cursor for block elements
+- **EventsExtension** - Custom event handling
+- **PositionerExtension** - Element positioning
+- **ShortcutsExtension** - Custom keyboard shortcuts
+- **FindExtension** - Find and replace
+- **CountExtension** - Word/character counting
+- **WhitespaceExtension** - Whitespace handling
+- **TrailingNodeExtension** - Ensure trailing block
+- **HardBreakExtension** - Hard line breaks
+- **BidiExtension** - Bidirectional text support
+- **DiffExtension** - Document diffing
+- **ColumnsExtension** - Multi-column layouts
+- **NodeFormattingExtension** - Node-level formatting
+- **AnnotationExtension** - Content annotations
+- **EmojiExtension** - Emoji picker support
+- **EpicModeExtension** - Fun particle effects
+
+### React-Specific
+- **ReactComponentExtension** - React component nodes
+- **ReactSSRExtension** - Server-side rendering support
+
+## Using Extensions
+
+```typescript
+import { Remirror, useRemirror } from '@remirror/react';
+import { BoldExtension, ItalicExtension, HeadingExtension } from 'remirror/extensions';
+
+function MyEditor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new BoldExtension(),
+      new ItalicExtension(),
+      new HeadingExtension(),
+    ],
+  });
+
+  return <Remirror manager={manager} />;
+}
+```
+
+## Extension Options
+
+Most extensions accept options to customize behavior:
+
+```typescript
+new HeadingExtension({
+  levels: [1, 2, 3], // Only H1, H2, H3
+  defaultLevel: 2,
+});
+
+new BoldExtension({
+  weight: 600, // Custom font weight
+});
+```
+
+## Commands
+
+Extensions provide commands through the `commands` object:
+
+```typescript
+const { commands } = manager;
+
+// Toggle formatting
+commands.toggleBold();
+commands.toggleItalic();
+
+// Set content
+commands.setHeading({ level: 1 });
+commands.insertText('Hello world');
+```
+
+## Keyboard Shortcuts
+
+Many extensions include built-in keyboard shortcuts:
+
+- `Mod-b` - Toggle bold
+- `Mod-i` - Toggle italic
+- `Mod-u` - Toggle underline
+- `Mod-Shift-7` - Toggle bullet list
+- `Mod-Shift-8` - Toggle ordered list
+- `Ctrl-Shift-1` - Heading level 1
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Text Formatting" href="/api/extensions/text-formatting">
+    Learn about formatting marks
+  </Card>
+  <Card title="Creating Extensions" href="/guides/creating-extensions">
+    Build custom extensions
+  </Card>
+</CardGroup>

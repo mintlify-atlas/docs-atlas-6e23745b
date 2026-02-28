@@ -1,0 +1,333 @@
+---
+title: React Components
+description: Reference for React components in Remirror including helper components for editor state management
+---
+
+# React Components
+
+Remirror provides several React components to help you build rich text editors with minimal boilerplate.
+
+## OnChangeJSON
+
+A component that listens to document changes and calls a callback with the JSON representation.
+
+```tsx
+import { OnChangeJSON } from '@remirror/react';
+import { useState } from 'react';
+
+const Editor = () => {
+  const [json, setJson] = useState(null);
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={setJson} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+### Props
+
+<ParamField path="onChange" type="(json: RemirrorJSON) => void" required>
+  Callback function that receives the editor content as JSON whenever the document changes
+</ParamField>
+
+### Usage
+
+This component is useful when you need to:
+- Save editor content as JSON
+- Sync editor state with external state management
+- Implement auto-save functionality
+- Track document changes for analytics
+
+<Info>
+  The `onChange` callback is only called when the document content changes, not on selection changes.
+</Info>
+
+### Example: Auto-save
+
+```tsx
+import { OnChangeJSON } from '@remirror/react';
+import { useCallback } from 'react';
+
+const AutoSaveEditor = () => {
+  const handleChange = useCallback((json) => {
+    // Debounce this in production
+    localStorage.setItem('editor-content', JSON.stringify(json));
+  }, []);
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={handleChange} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+---
+
+## OnChangeHTML
+
+A component that listens to document changes and calls a callback with the HTML representation.
+
+```tsx
+import { OnChangeHTML } from '@remirror/react';
+import { useState } from 'react';
+
+const Editor = () => {
+  const [html, setHtml] = useState('');
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeHTML onChange={setHtml} />
+      <EditorComponent />
+      
+      <div className="preview">
+        <h3>Preview</h3>
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </Remirror>
+  );
+};
+```
+
+### Props
+
+<ParamField path="onChange" type="(html: string) => void" required>
+  Callback function that receives the editor content as HTML whenever the document changes
+</ParamField>
+
+### Usage
+
+This component is useful when you need to:
+- Export editor content as HTML
+- Provide a live preview of the rendered content
+- Send HTML content to a backend API
+- Display formatted content outside the editor
+
+<Warning>
+  The HTML output may contain editor-specific markup. Use `getHTML()` helper for production-ready HTML output.
+</Warning>
+
+### Example: Live Preview
+
+```tsx
+import { OnChangeHTML } from '@remirror/react';
+import { useState } from 'react';
+
+const LivePreviewEditor = () => {
+  const [html, setHtml] = useState('');
+
+  return (
+    <div className="editor-container">
+      <div className="editor-pane">
+        <Remirror manager={manager}>
+          <OnChangeHTML onChange={setHtml} />
+          <EditorComponent />
+        </Remirror>
+      </div>
+      
+      <div className="preview-pane">
+        <h2>Live Preview</h2>
+        <article dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## EditorComponent
+
+The default editor component where the ProseMirror editor will be rendered.
+
+```tsx
+import { EditorComponent, Remirror } from '@remirror/react';
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager}>
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+### Usage
+
+The `EditorComponent` is a simple wrapper that:
+- Applies the editor wrapper class for styling
+- Spreads `getRootProps()` to inject the ProseMirror view
+- Provides the default rendering location for the editor
+
+<Info>
+  You can create custom editor components using `getRootProps()`. See the [Remirror Component](/api/react/remirror-component) page for details.
+</Info>
+
+### Example: Custom Editor Component
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const CustomEditorComponent = () => {
+  const { getRootProps } = useRemirrorContext();
+
+  return (
+    <div className="my-custom-editor">
+      <div className="editor-toolbar">
+        {/* Toolbar buttons */}
+      </div>
+      <div {...getRootProps()} className="editor-content" />
+    </div>
+  );
+};
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager}>
+      <CustomEditorComponent />
+    </Remirror>
+  );
+};
+```
+
+---
+
+## Component Composition
+
+Remirror components are designed to work together seamlessly:
+
+```tsx
+import { 
+  Remirror, 
+  EditorComponent,
+  OnChangeJSON,
+  OnChangeHTML,
+  useCommands,
+  useActive
+} from '@remirror/react';
+import { useState, useCallback } from 'react';
+
+const Toolbar = () => {
+  const commands = useCommands();
+  const active = useActive();
+
+  return (
+    <div className="toolbar">
+      <button 
+        onClick={() => commands.toggleBold()}
+        className={active.bold() ? 'active' : ''}
+      >
+        Bold
+      </button>
+      <button 
+        onClick={() => commands.toggleItalic()}
+        className={active.italic() ? 'active' : ''}
+      >
+        Italic
+      </button>
+    </div>
+  );
+};
+
+const CompleteEditor = () => {
+  const [json, setJson] = useState(null);
+  const [html, setHtml] = useState('');
+
+  const handleSave = useCallback(() => {
+    // Save both formats
+    console.log('Saving:', { json, html });
+  }, [json, html]);
+
+  return (
+    <div>
+      <Remirror manager={manager}>
+        <OnChangeJSON onChange={setJson} />
+        <OnChangeHTML onChange={setHtml} />
+        <Toolbar />
+        <EditorComponent />
+      </Remirror>
+      
+      <button onClick={handleSave}>Save</button>
+    </div>
+  );
+};
+```
+
+---
+
+## Best Practices
+
+### Performance Optimization
+
+When using `OnChangeJSON` or `OnChangeHTML`, always memoize your callbacks:
+
+```tsx
+import { useCallback } from 'react';
+
+const Editor = () => {
+  const handleChange = useCallback((json) => {
+    // This function won't be recreated on every render
+    saveToBackend(json);
+  }, []); // Add dependencies if needed
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={handleChange} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+### Debouncing Changes
+
+For auto-save functionality, debounce the onChange callbacks:
+
+```tsx
+import { useCallback } from 'react';
+import { debounce } from 'lodash';
+
+const Editor = () => {
+  const debouncedSave = useCallback(
+    debounce((json) => {
+      saveToBackend(json);
+    }, 1000),
+    []
+  );
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={debouncedSave} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+### Error Handling
+
+Handle errors in your change callbacks:
+
+```tsx
+const Editor = () => {
+  const handleChange = useCallback(async (json) => {
+    try {
+      await saveToBackend(json);
+    } catch (error) {
+      console.error('Failed to save:', error);
+      // Show error toast to user
+    }
+  }, []);
+
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={handleChange} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```

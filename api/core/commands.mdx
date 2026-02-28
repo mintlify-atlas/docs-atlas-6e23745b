@@ -1,0 +1,646 @@
+---
+title: Command System
+description: Complete API reference for Remirror's command system, including creating commands, command functions, and built-in command utilities.
+---
+
+# Command System
+
+Commands are the primary way to modify the editor state in Remirror. They encapsulate state transformations and can be chained together for complex operations.
+
+## Command Function Signature
+
+All commands follow the ProseMirror command pattern:
+
+```typescript
+type CommandFunction<Extra = object> = (
+  props: CommandFunctionProps & Extra
+) => boolean
+```
+
+<ParamField path="props" type="CommandFunctionProps & Extra" required>
+  <ParamField path="state" type="EditorState" required>
+    Current editor state
+  </ParamField>
+  
+  <ParamField path="tr" type="Transaction" required>
+    Transaction for making changes
+  </ParamField>
+  
+  <ParamField path="dispatch" type="DispatchFunction | undefined">
+    Function to dispatch the transaction. Undefined when checking if command is enabled.
+  </ParamField>
+  
+  <ParamField path="view" type="EditorView | undefined">
+    The editor view instance
+  </ParamField>
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  `true` if the command can be executed, `false` otherwise
+</ResponseField>
+
+## Creating Commands
+
+### Using the @command Decorator
+
+The recommended way to create commands in extensions:
+
+<CodeGroup>
+```typescript Basic Command
+import { PlainExtension, command, CommandFunction } from 'remirror';
+
+class MyExtension extends PlainExtension {
+  get name() {
+    return 'myExtension' as const;
+  }
+
+  @command()
+  insertGreeting(): CommandFunction {
+    return ({ tr, dispatch }) => {
+      if (dispatch) {
+        tr.insertText('Hello, World!');
+        dispatch(tr);
+      }
+      return true;
+    };
+  }
+}
+```
+
+```typescript Command with Parameters
+@command()
+insertCustomText(text: string): CommandFunction {
+  return ({ tr, dispatch }) => {
+    if (dispatch) {
+      tr.insertText(text);
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
+// Usage:
+commands.insertCustomText('Hello!');
+```
+
+```typescript Conditional Command
+@command()
+toggleBoldIfPossible(): CommandFunction {
+  return ({ state, tr, dispatch }) => {
+    const { selection } = state;
+    
+    // Check if bold mark is allowed
+    if (!selection.$from.parent.type.allowsMarkType(state.schema.marks.bold)) {
+      return false;
+    }
+    
+    if (dispatch) {
+      // Toggle the bold mark
+      const boldMark = state.schema.marks.bold;
+      const hasBold = selection.$from.marks().some(mark => mark.type === boldMark);
+      
+      if (hasBold) {
+        tr.removeMark(selection.from, selection.to, boldMark);
+      } else {
+        tr.addMark(selection.from, selection.to, boldMark.create());
+      }
+      
+      dispatch(tr);
+    }
+    
+    return true;
+  };
+}
+```
+</CodeGroup>
+
+### Command Decorator Options
+
+```typescript
+interface CommandDecoratorOptions {
+  /**
+   * Icon for the command (used in UI)
+   */
+  icon?: string;
+  
+  /**
+   * Label for the command (used in UI)
+   */
+  label?: string;
+  
+  /**
+   * Description of what the command does
+   */
+  description?: string;
+  
+  /**
+   * Keyboard shortcut for this command
+   */
+  shortcut?: string;
+  
+  /**
+   * Whether this command should be disabled
+   */
+  disableChaining?: boolean;
+}
+```
+
+<CodeGroup>
+```typescript With Metadata
+@command({
+  icon: 'bold',
+  label: 'Bold',
+  description: 'Make text bold',
+  shortcut: 'Mod-b',
+})
+toggleBold(): CommandFunction {
+  return toggleMark({ type: this.type });
+}
+```
+</CodeGroup>
+
+## Built-in Command Utilities
+
+### toggleMark()
+
+Toggle a mark on the current selection.
+
+```typescript
+function toggleMark(props: ToggleMarkProps): CommandFunction
+```
+
+<ParamField path="props" type="ToggleMarkProps" required>
+  <ParamField path="type" type="string | MarkType" required>
+    The mark type to toggle
+  </ParamField>
+  
+  <ParamField path="attrs" type="ProsemirrorAttributes">
+    Attributes for the mark
+  </ParamField>
+  
+  <ParamField path="selection" type="PrimitiveSelection">
+    Custom selection to toggle mark on
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```typescript Basic Usage
+import { toggleMark } from 'remirror';
+
+@command()
+toggleItalic(): CommandFunction {
+  return toggleMark({ type: this.type });
+}
+```
+
+```typescript With Attributes
+@command()
+toggleLink(href: string): CommandFunction {
+  return toggleMark({
+    type: 'link',
+    attrs: { href },
+  });
+}
+```
+
+```typescript Custom Selection
+@command()
+markRange(from: number, to: number): CommandFunction {
+  return toggleMark({
+    type: this.type,
+    selection: { from, to },
+  });
+}
+```
+</CodeGroup>
+
+### applyMark()
+
+Apply a mark without toggling (always adds).
+
+```typescript
+function applyMark(
+  type: string | MarkType,
+  attrs?: ProsemirrorAttributes,
+  selectionPoint?: PrimitiveSelection
+): CommandFunction
+```
+
+<CodeGroup>
+```typescript Apply Mark
+import { applyMark } from 'remirror';
+
+@command()
+applyHighlight(color: string): CommandFunction {
+  return applyMark(this.type, { color });
+}
+```
+</CodeGroup>
+
+### insertText()
+
+Insert text at the current position.
+
+```typescript
+function insertText(
+  text: string,
+  options?: InsertTextOptions
+): CommandFunction
+```
+
+<ParamField path="text" type="string" required>
+  The text to insert
+</ParamField>
+
+<ParamField path="options" type="InsertTextOptions">
+  <ParamField path="from" type="number">
+    Start position (defaults to selection start)
+  </ParamField>
+  
+  <ParamField path="to" type="number">
+    End position (defaults to selection end)
+  </ParamField>
+  
+  <ParamField path="marks" type="Record<string, ProsemirrorAttributes>">
+    Marks to apply to inserted text
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```typescript Basic Insert
+import { insertText } from 'remirror';
+
+@command()
+insertSignature(): CommandFunction {
+  return insertText('\n\nBest regards,\nYour Name');
+}
+```
+
+```typescript With Marks
+@command()
+insertBoldText(text: string): CommandFunction {
+  return insertText(text, {
+    marks: {
+      bold: {},
+    },
+  });
+}
+```
+
+```typescript At Specific Position
+@command()
+insertAtStart(text: string): CommandFunction {
+  return insertText(text, {
+    from: 0,
+    to: 0,
+  });
+}
+```
+</CodeGroup>
+
+## Delayed Commands
+
+Commands that execute after an asynchronous operation completes.
+
+### DelayedCommand Class
+
+```typescript
+class DelayedCommand<Value> {
+  constructor(
+    promiseCreator: (props: CommandFunctionProps) => Promise<Value>
+  )
+  
+  validate(handler: CommandFunction, method?: 'push' | 'unshift'): this
+  success(handler: CommandFunction<{ value: Value }>, method?: 'push' | 'unshift'): this
+  failure(handler: CommandFunction<{ error: any }>, method?: 'push' | 'unshift'): this
+  generateCommand(): CommandFunction
+}
+```
+
+<CodeGroup>
+```typescript Upload Image Example
+import { DelayedCommand } from 'remirror';
+
+class ImageExtension extends NodeExtension {
+  @command()
+  uploadImage(file: File): CommandFunction {
+    return new DelayedCommand<string>((props) => {
+      return uploadFile(file);
+    })
+      .validate(({ tr, dispatch }) => {
+        // Add placeholder immediately
+        const placeholder = this.type.create({ src: 'loading...' });
+        if (dispatch) {
+          tr.replaceSelectionWith(placeholder);
+          dispatch(tr);
+        }
+        return true;
+      })
+      .success(({ tr, dispatch, value: imageUrl }) => {
+        // Replace placeholder with actual image
+        const image = this.type.create({ src: imageUrl });
+        if (dispatch) {
+          tr.replaceSelectionWith(image);
+          dispatch(tr);
+        }
+        return true;
+      })
+      .failure(({ tr, dispatch, error }) => {
+        // Remove placeholder on failure
+        if (dispatch) {
+          tr.deleteSelection();
+          dispatch(tr);
+        }
+        return true;
+      })
+      .generateCommand();
+  }
+}
+```
+
+```typescript Fetch Data Example
+@command()
+insertDataFromAPI(endpoint: string): CommandFunction {
+  return new DelayedCommand<{ title: string; content: string }>(
+    async () => {
+      const response = await fetch(endpoint);
+      return response.json();
+    }
+  )
+    .validate(({ tr, dispatch }) => {
+      if (dispatch) {
+        tr.insertText('Loading...');
+        dispatch(tr);
+      }
+      return true;
+    })
+    .success(({ value, tr, dispatch }) => {
+      if (dispatch) {
+        tr.replaceSelectionWith(
+          this.type.create({ title: value.title, content: value.content })
+        );
+        dispatch(tr);
+      }
+      return true;
+    })
+    .generateCommand();
+}
+```
+</CodeGroup>
+
+## Chaining Commands
+
+Commands can be chained together using the chainable API:
+
+<CodeGroup>
+```typescript Basic Chaining
+manager.store.chain
+  .insertText('Hello ')
+  .toggleBold()
+  .insertText('World')
+  .run();
+```
+
+```typescript Conditional Chaining
+const chain = manager.store.chain
+  .insertText('Start');
+
+if (shouldBeBold) {
+  chain.toggleBold();
+}
+
+chain.insertText(' End').run();
+```
+
+```typescript With Custom Commands
+manager.store.chain
+  .insertGreeting()
+  .insertCustomText(' - ')
+  .insertSignature()
+  .run();
+```
+</CodeGroup>
+
+### Chain Methods
+
+<ResponseField name="run" type="() => void">
+  Execute all chained commands
+</ResponseField>
+
+<ResponseField name="enabled" type="() => boolean">
+  Check if all commands in the chain can be executed
+</ResponseField>
+
+<ResponseField name="tr" type="Transaction">
+  Access the underlying transaction
+</ResponseField>
+
+## Command Testing
+
+Commands return `false` when they can't execute, making them easy to test:
+
+<CodeGroup>
+```typescript Dry Run
+const canInsert = commands.insertCustomNode();
+
+if (!canInsert) {
+  console.log('Cannot insert node at current position');
+}
+```
+
+```typescript Check Enabled
+if (commands.toggleBold.enabled()) {
+  // Bold can be toggled
+  commands.toggleBold();
+}
+```
+</CodeGroup>
+
+## Transaction Helpers
+
+Common patterns for working with transactions in commands:
+
+<CodeGroup>
+```typescript Selection
+const { from, to } = tr.selection;
+const { empty } = tr.selection;
+const cursor = tr.selection.$cursor;
+```
+
+```typescript Document Queries
+const doc = tr.doc;
+const nodeSize = doc.nodeSize;
+const node = doc.nodeAt(pos);
+```
+
+```typescript Marks
+// Add mark
+tr.addMark(from, to, schema.marks.bold.create());
+
+// Remove mark
+tr.removeMark(from, to, schema.marks.bold);
+
+// Check for mark
+const hasBold = tr.doc.rangeHasMark(from, to, schema.marks.bold);
+```
+
+```typescript Insert/Replace
+// Insert text
+tr.insertText('Hello', from, to);
+
+// Replace selection
+tr.replaceSelectionWith(node);
+
+// Delete range
+tr.delete(from, to);
+```
+</CodeGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Check dispatch">
+    Only modify the transaction when `dispatch` is provided. Return `true`/`false` based on whether the command *can* execute.
+    
+    ```typescript
+    @command()
+    myCommand(): CommandFunction {
+      return ({ tr, dispatch }) => {
+        // Check if command is possible
+        if (!canExecute()) {
+          return false;
+        }
+        
+        // Only modify when dispatching
+        if (dispatch) {
+          tr.insertText('Hello');
+          dispatch(tr);
+        }
+        
+        return true;
+      };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Return Boolean Correctly">
+    Return `true` if the command *can* be executed (even if not dispatching), `false` if it cannot.
+    
+    ```typescript
+    @command()
+    deleteIfEmpty(): CommandFunction {
+      return ({ state, tr, dispatch }) => {
+        // Return false if preconditions not met
+        if (!state.selection.empty) {
+          return false;
+        }
+        
+        if (dispatch) {
+          tr.deleteSelection();
+          dispatch(tr);
+        }
+        
+        // Return true because command CAN execute
+        return true;
+      };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Type-Safe Marks/Nodes">
+    Prefer accessing marks and nodes through extension types rather than string lookup.
+    
+    ```typescript
+    // GOOD ✅
+    @command()
+    toggleMyMark(): CommandFunction {
+      return toggleMark({ type: this.type });
+    }
+    
+    // BAD ❌
+    @command()
+    toggleMyMark(): CommandFunction {
+      return ({ state }) => {
+        return toggleMark({ type: state.schema.marks.myMark });
+      };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Edge Cases">
+    Consider empty selections, readonly mode, and invalid positions.
+    
+    ```typescript
+    @command()
+    insertAtPosition(pos: number, text: string): CommandFunction {
+      return ({ tr, dispatch, state }) => {
+        // Validate position
+        if (pos < 0 || pos > tr.doc.content.size) {
+          return false;
+        }
+        
+        // Check if editor is readonly
+        if (!state.doc.type.validContent(tr.doc.content)) {
+          return false;
+        }
+        
+        if (dispatch) {
+          tr.insertText(text, pos);
+          dispatch(tr);
+        }
+        
+        return true;
+      };
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Type Definitions
+
+```typescript
+type CommandFunction<Extra = object> = (
+  props: CommandFunctionProps & Extra
+) => boolean;
+
+interface CommandFunctionProps {
+  state: EditorState;
+  tr: Transaction;
+  dispatch?: DispatchFunction;
+  view?: EditorView;
+}
+
+type DispatchFunction = (tr: Transaction) => void;
+
+interface ToggleMarkProps {
+  type: string | MarkType;
+  attrs?: ProsemirrorAttributes;
+  selection?: PrimitiveSelection;
+}
+
+interface InsertTextOptions {
+  from?: number;
+  to?: number;
+  marks?: Record<string, ProsemirrorAttributes>;
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Extension Base Class" icon="puzzle-piece" href="/api/core/extension">
+    Learn how to create extensions with commands
+  </Card>
+  
+  <Card title="RemirrorManager" icon="gears" href="/api/core/manager">
+    Access commands through the manager
+  </Card>
+  
+  <Card title="Helpers" icon="wand-magic-sparkles" href="/api/core/helpers">
+    Read-only alternatives to commands
+  </Card>
+  
+  <Card title="Command Tutorial" icon="book" href="/guides/commands">
+    Step-by-step command creation guide
+  </Card>
+</CardGroup>

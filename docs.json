@@ -1,122 +1,142 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Remirror",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7963d2",
+    "light": "#9b8ee3",
+    "dark": "#5a47a3"
   },
   "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/remirror/remirror"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/remirror/remirror"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/extensions",
+              "concepts/presets",
+              "concepts/manager",
+              "concepts/state-management"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/building-custom-editor",
+              "guides/working-with-extensions",
+              "guides/styling",
+              "guides/collaboration",
+              "guides/controlled-editor",
+              "guides/static-rendering"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "React Integration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "react/hooks",
+              "react/components",
+              "react/context"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/commands",
+              "advanced/plugins",
+              "advanced/schemas",
+              "advanced/node-views"
+            ]
+          },
+          {
+            "group": "Migration",
+            "pages": [
+              "migration/v2-to-v3",
+              "migration/v1-to-v2"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core",
             "pages": [
-              "api-reference/introduction"
+              "api/core/manager",
+              "api/core/extension",
+              "api/core/commands",
+              "api/core/helpers"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "React",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/react/hooks",
+              "api/react/components",
+              "api/react/remirror-component",
+              "api/react/context"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "api/extensions/overview",
+              "api/extensions/text-formatting",
+              "api/extensions/block-elements",
+              "api/extensions/lists",
+              "api/extensions/tables",
+              "api/extensions/collaboration",
+              "api/extensions/markdown",
+              "api/extensions/code"
+            ]
+          },
+          {
+            "group": "Presets",
+            "pages": [
+              "api/presets/core",
+              "api/presets/formatting",
+              "api/presets/wysiwyg",
+              "api/presets/react"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Community",
+            "pages": [
+              "resources/contributing",
+              "resources/faq",
+              "resources/showcase"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

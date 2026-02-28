@@ -1,0 +1,531 @@
+---
+title: Presets
+description: Compose extensions into reusable presets for common editor configurations
+---
+
+# Presets
+
+Presets are collections of extensions bundled together for specific use cases. They simplify editor setup by providing pre-configured extension combinations that work well together.
+
+<Info>
+  Think of presets as "starter kits" that give you a fully-functional editor configuration with a single import. You can use presets as-is or customize them to fit your needs.
+</Info>
+
+## Why Use Presets?
+
+Presets provide several benefits:
+
+- **Faster Setup** - Get a working editor without manually configuring extensions
+- **Best Practices** - Extensions are pre-configured with sensible defaults
+- **Consistency** - Same configuration across multiple editors
+- **Composition** - Combine multiple presets together
+- **Customization** - Override options and exclude unwanted extensions
+
+## Built-in Presets
+
+Remirror includes several presets for common scenarios:
+
+<Tabs>
+  <Tab title="Core Preset">
+    **corePreset** - Essential extensions for any editor.
+    
+    Includes:
+    - `DocExtension` - Root document node
+    - `TextExtension` - Text node
+    - `ParagraphExtension` - Paragraph blocks
+    - `HistoryExtension` - Undo/redo functionality
+    - `GapCursorExtension` - Cursor in non-editable areas
+    - `PositionerExtension` - Position tracking for tooltips
+    - `EventsExtension` - Editor event handling
+    
+    ```typescript
+    import { corePreset } from '@remirror/preset-core';
+    import { RemirrorManager } from 'remirror';
+    
+    const manager = RemirrorManager.create([
+      ...corePreset(),
+      // Add your extensions
+    ]);
+    ```
+    
+    <Note>
+      The React integration (`@remirror/react`) automatically includes the core preset. You only need to add it manually for vanilla JS editors.
+    </Note>
+  </Tab>
+  
+  <Tab title="Wysiwyg Preset">
+    **wysiwygPreset** - Full-featured rich text editor.
+    
+    Includes common formatting extensions:
+    - Bold, italic, underline, strike
+    - Headings (h1-h6)
+    - Lists (bullet and ordered)
+    - Blockquotes
+    - Code blocks
+    - Links
+    - And more...
+    
+    ```typescript
+    import { wysiwygPreset } from 'remirror/extensions';
+    import { RemirrorManager } from 'remirror';
+    
+    const manager = RemirrorManager.create([
+      ...wysiwygPreset(),
+    ]);
+    ```
+    
+    Perfect for:
+    - Blog editors
+    - Content management systems
+    - Document editors
+    - Comment sections
+  </Tab>
+  
+  <Tab title="Formatting Preset">
+    **formattingPreset** - Text formatting without block structure.
+    
+    Includes:
+    - Bold, italic, underline
+    - Text color and highlighting
+    - Font family and size
+    - Subscript and superscript
+    
+    ```typescript
+    import { formattingPreset } from '@remirror/preset-formatting';
+    
+    const manager = RemirrorManager.create([
+      ...corePreset(),
+      ...formattingPreset(),
+    ]);
+    ```
+    
+    Perfect for:
+    - Single-line inputs
+    - Chat messages
+    - Inline editors
+  </Tab>
+  
+  <Tab title="Builtin Preset">
+    **builtinPreset** - Internal extensions that power the editor.
+    
+    Automatically included in every editor:
+    - `SchemaExtension` - Creates the ProseMirror schema
+    - `CommandsExtension` - Aggregates commands
+    - `HelpersExtension` - Aggregates helpers
+    - `KeymapExtension` - Keyboard shortcut management
+    - `PluginsExtension` - Plugin aggregation
+    - Plus 9 more internal extensions
+    
+    ```typescript
+    // Automatically included - you don't need to add this
+    const extensions = [
+      ...builtinPreset(),
+      ...yourExtensions,
+    ];
+    ```
+    
+    <Info>
+      You can configure built-in extensions via manager settings, but you cannot remove them.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Creating Custom Presets
+
+Create your own presets for reusable configurations:
+
+### Basic Preset Function
+
+```typescript
+import { BoldExtension, ItalicExtension, UnderlineExtension } from 'remirror/extensions';
+
+export function simpleFormattingPreset() {
+  return [
+    new BoldExtension(),
+    new ItalicExtension(),
+    new UnderlineExtension(),
+  ];
+}
+
+// Usage
+const manager = RemirrorManager.create([
+  ...corePreset(),
+  ...simpleFormattingPreset(),
+]);
+```
+
+### Preset with Options
+
+Make presets configurable:
+
+```typescript
+import { GetStaticAndDynamic } from 'remirror';
+import {
+  BoldExtension,
+  ItalicExtension,
+  LinkExtension,
+  LinkOptions,
+} from 'remirror/extensions';
+
+interface BlogPresetOptions extends LinkOptions {
+  /**
+   * Enable comments functionality
+   * @defaultValue false
+   */
+  enableComments?: boolean;
+}
+
+export function blogPreset(
+  options: GetStaticAndDynamic<BlogPresetOptions> = {}
+) {
+  const {
+    enableComments = false,
+    autoLink = true,
+    ...linkOptions
+  } = options;
+  
+  const extensions = [
+    new BoldExtension(),
+    new ItalicExtension(),
+    new LinkExtension({ autoLink, ...linkOptions }),
+  ];
+  
+  if (enableComments) {
+    extensions.push(new AnnotationExtension());
+  }
+  
+  return extensions;
+}
+
+// Usage with options
+const manager = RemirrorManager.create([
+  ...corePreset(),
+  ...blogPreset({
+    enableComments: true,
+    autoLink: false,
+  }),
+]);
+```
+
+### Preset with Extension Exclusion
+
+Allow users to exclude specific extensions:
+
+```typescript
+import { Static } from 'remirror';
+
+type PresetExtension = 'bold' | 'italic' | 'underline' | 'strike';
+
+interface FormattingPresetOptions {
+  /**
+   * Extensions to exclude from the preset
+   * @defaultValue []
+   */
+  exclude?: Static<PresetExtension[]>;
+}
+
+export function formattingPreset(
+  options: FormattingPresetOptions = {}
+) {
+  const { exclude = [] } = options;
+  const extensions = [];
+  
+  if (!exclude.includes('bold')) {
+    extensions.push(new BoldExtension());
+  }
+  
+  if (!exclude.includes('italic')) {
+    extensions.push(new ItalicExtension());
+  }
+  
+  if (!exclude.includes('underline')) {
+    extensions.push(new UnderlineExtension());
+  }
+  
+  if (!exclude.includes('strike')) {
+    extensions.push(new StrikeExtension());
+  }
+  
+  return extensions;
+}
+
+// Usage
+const manager = RemirrorManager.create([
+  ...corePreset(),
+  // Exclude underline and strike
+  ...formattingPreset({ exclude: ['underline', 'strike'] }),
+]);
+```
+
+<Tip>
+  The core preset supports exclusion out of the box. See the example below.
+</Tip>
+
+## Configuring Presets
+
+Presets can be configured when instantiating:
+
+### Core Preset Configuration
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+
+const extensions = [
+  ...corePreset({
+    // Exclude history for collaborative editing
+    excludeExtensions: ['history'],
+    
+    // Configure history depth
+    depth: 50,
+    
+    // Configure paragraph node
+    content: 'inline*',
+  }),
+];
+```
+
+### Via Manager Settings
+
+Configure presets through manager settings:
+
+```typescript
+import { RemirrorManager } from 'remirror';
+import { wysiwygPreset } from 'remirror/extensions';
+
+const manager = RemirrorManager.create(
+  [...wysiwygPreset()],
+  {
+    // Configure core preset
+    core: {
+      excludeExtensions: ['history'],
+    },
+    
+    // Configure builtin preset
+    builtin: {
+      exitMarksOnArrowPress: true,
+      persistentSelectionClass: 'selection',
+    },
+  }
+);
+```
+
+### React Integration
+
+With `@remirror/react`, configure via `useRemirror`:
+
+```tsx
+import { useRemirror, Remirror } from '@remirror/react';
+import { wysiwygPreset } from 'remirror/extensions';
+
+function Editor() {
+  const { manager } = useRemirror({
+    extensions: wysiwygPreset,
+    
+    // Configure core preset
+    core: {
+      excludeExtensions: ['history'],
+    },
+    
+    // Configure builtin preset
+    builtin: {
+      exitMarksOnArrowPress: true,
+    },
+  });
+  
+  return <Remirror manager={manager} />;
+}
+```
+
+## Combining Presets
+
+Presets compose naturally with the spread operator:
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+import { wysiwygPreset } from 'remirror/extensions';
+import { CollaborationExtension } from '@remirror/extension-yjs';
+
+const manager = RemirrorManager.create([
+  // Core functionality
+  ...corePreset({
+    excludeExtensions: ['history'], // Conflicts with collaboration
+  }),
+  
+  // Rich text features
+  ...wysiwygPreset(),
+  
+  // Add collaboration
+  new CollaborationExtension({
+    getProvider: () => yjsProvider,
+  }),
+  
+  // Add custom extensions
+  new CustomExtension(),
+]);
+```
+
+<Note>
+  When combining presets, later extensions override earlier ones with the same name. Use this for customization.
+</Note>
+
+## Example: Blog Editor Preset
+
+A complete example combining multiple concepts:
+
+```typescript
+import { GetStaticAndDynamic, Static } from 'remirror';
+import {
+  BoldExtension,
+  ItalicExtension,
+  LinkExtension,
+  HeadingExtension,
+  BlockquoteExtension,
+  BulletListExtension,
+  OrderedListExtension,
+  ImageExtension,
+  CodeBlockExtension,
+} from 'remirror/extensions';
+
+interface BlogEditorPresetOptions {
+  /**
+   * Allowed heading levels
+   * @defaultValue [1, 2, 3, 4]
+   */
+  headingLevels?: Static<number[]>;
+  
+  /**
+   * Enable image uploads
+   * @defaultValue true
+   */
+  enableImages?: boolean;
+  
+  /**
+   * Enable code blocks
+   * @defaultValue true
+   */
+  enableCodeBlocks?: boolean;
+  
+  /**
+   * Image upload handler
+   */
+  onImageUpload?: (file: File) => Promise<string>;
+}
+
+export function blogEditorPreset(
+  options: GetStaticAndDynamic<BlogEditorPresetOptions> = {}
+) {
+  const {
+    headingLevels = [1, 2, 3, 4],
+    enableImages = true,
+    enableCodeBlocks = true,
+    onImageUpload,
+  } = options;
+  
+  const extensions = [
+    // Text formatting
+    new BoldExtension(),
+    new ItalicExtension(),
+    new LinkExtension({ autoLink: true }),
+    
+    // Block elements
+    new HeadingExtension({ levels: headingLevels }),
+    new BlockquoteExtension(),
+    new BulletListExtension(),
+    new OrderedListExtension(),
+  ];
+  
+  if (enableImages) {
+    extensions.push(
+      new ImageExtension({
+        enableResizing: true,
+        uploadHandler: onImageUpload,
+      })
+    );
+  }
+  
+  if (enableCodeBlocks) {
+    extensions.push(
+      new CodeBlockExtension({
+        supportedLanguages: ['javascript', 'typescript', 'python'],
+      })
+    );
+  }
+  
+  return extensions;
+}
+
+// Usage
+import { createCoreManager } from '@remirror/preset-core';
+
+const manager = createCoreManager(
+  () => [
+    ...blogEditorPreset({
+      headingLevels: [2, 3, 4], // No h1
+      enableCodeBlocks: false,  // Disable code
+      onImageUpload: async (file) => {
+        // Upload to server
+        const url = await uploadToS3(file);
+        return url;
+      },
+    }),
+  ],
+  {
+    core: {
+      // Core preset options
+    },
+  }
+);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Preset Naming">
+    Follow these conventions:
+    - Use descriptive names: `blogPreset`, `chatPreset`, `notesPreset`
+    - Export as functions: `export function myPreset() { ... }`
+    - Use camelCase for preset names
+    - Suffix with `Preset` for clarity
+  </Accordion>
+  
+  <Accordion title="Option Defaults">
+    Provide sensible defaults:
+    - Set default values for all options
+    - Document defaults in JSDoc comments
+    - Use `GetStaticAndDynamic<T>` for option types
+    - Make most options optional
+  </Accordion>
+  
+  <Accordion title="Extension Conflicts">
+    Avoid conflicts:
+    - Document which extensions might conflict
+    - Provide exclusion mechanisms
+    - Test preset combinations
+    - Consider using `excludeExtensions` pattern
+  </Accordion>
+  
+  <Accordion title="Type Safety">
+    Leverage TypeScript:
+    - Export option interfaces
+    - Use union types for exclusion lists
+    - Provide proper return types
+    - Enable strict mode
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extensions" icon="puzzle-piece" href="./extensions">
+    Learn about individual extensions
+  </Card>
+  <Card title="Manager" icon="gear" href="./manager">
+    Understand manager configuration
+  </Card>
+  <Card title="Extension List" icon="list" href="/extensions">
+    Browse available extensions
+  </Card>
+  <Card title="State Management" icon="database" href="./state-management">
+    Learn about state flow
+  </Card>
+</CardGroup>

@@ -1,0 +1,824 @@
+---
+title: ProseMirror Schemas
+description: Understand ProseMirror schemas, define custom node and mark specifications, and implement schema validation
+---
+
+# ProseMirror Schemas
+
+The schema is the heart of a ProseMirror editor—it defines what content is allowed, how it's structured, and how it's rendered. Remirror's `SchemaExtension` handles schema creation automatically from your extensions.
+
+<Info>
+  A schema defines your document model: what nodes and marks exist, their attributes, content rules, and how they're parsed from and serialized to HTML.
+</Info>
+
+## Understanding Schemas
+
+A ProseMirror schema consists of two parts:
+
+- **Nodes** - Structural elements like paragraphs, headings, and images
+- **Marks** - Annotations like bold, italic, and links
+
+```typescript
+import { Schema } from '@remirror/pm/model';
+
+// Schema is created from node and mark specs
+const schema = new Schema({
+  nodes: {
+    doc: { content: 'block+' },
+    paragraph: {
+      content: 'inline*',
+      group: 'block',
+      parseDOM: [{ tag: 'p' }],
+      toDOM: () => ['p', 0],
+    },
+    text: { group: 'inline' },
+  },
+  marks: {
+    bold: {
+      parseDOM: [{ tag: 'strong' }],
+      toDOM: () => ['strong', 0],
+    },
+  },
+});
+```
+
+## Node Specifications
+
+### Basic Node Spec
+
+Define nodes using the `createNodeSpec` method:
+
+```typescript
+import {
+  NodeExtension,
+  NodeExtensionSpec,
+  ApplySchemaAttributes,
+  NodeSpecOverride,
+} from '@remirror/core';
+
+class CalloutExtension extends NodeExtension {
+  get name() {
+    return 'callout' as const;
+  }
+  
+  createNodeSpec(
+    extra: ApplySchemaAttributes,
+    override: NodeSpecOverride
+  ): NodeExtensionSpec {
+    return {
+      // Content expression: what this node can contain
+      content: 'block+',
+      
+      // Group membership for content expressions
+      group: 'block',
+      
+      // Defines boundaries in document structure
+      defining: true,
+      
+      // Whether node can be dragged
+      draggable: false,
+      
+      // Apply overrides from manager or extension options
+      ...override,
+      
+      // Define attributes
+      attrs: {
+        type: { default: 'info' },
+        ...extra.defaults(),
+      },
+      
+      // Parse from HTML
+      parseDOM: [
+        {
+          tag: 'div[data-callout]',
+          getAttrs: (dom) => {
+            const element = dom as HTMLElement;
+            return {
+              type: element.getAttribute('data-callout-type') || 'info',
+              ...extra.parse(dom),
+            };
+          },
+        },
+        ...(override.parseDOM ?? []),
+      ],
+      
+      // Serialize to HTML
+      toDOM: (node) => [
+        'div',
+        {
+          'data-callout': '',
+          'data-callout-type': node.attrs.type,
+          class: `callout callout-${node.attrs.type}`,
+          ...extra.dom(node),
+        },
+        0, // 0 means "render content here"
+      ],
+    };
+  }
+}
+```
+
+### Content Expressions
+
+Content expressions define what a node can contain:
+
+<Tabs>
+  <Tab title="Basic Expressions">
+    ```typescript
+    // No content (leaf node)
+    content: ''
+    
+    // Only text
+    content: 'text*'
+    
+    // Any inline content (text + inline nodes)
+    content: 'inline*'
+    
+    // One or more blocks
+    content: 'block+'
+    
+    // Specific node types
+    content: 'paragraph+'
+    
+    // Choice between types
+    content: 'paragraph | heading'
+    
+    // Sequence of types
+    content: 'heading paragraph+'
+    
+    // Optional content
+    content: 'heading? paragraph+'
+    
+    // Groups
+    content: '(paragraph | heading)+'
+    ```
+  </Tab>
+  
+  <Tab title="Advanced Examples">
+    ```typescript
+    // List items: paragraph followed by optional list
+    content: 'paragraph (orderedList | bulletList)?'
+    
+    // Table row: one or more table cells
+    content: 'tableCell+'
+    
+    // Code block: only text, no marks
+    content: 'text*'
+    
+    // Callout: title then any blocks
+    content: 'calloutTitle block+'
+    
+    // Flexible container: any content
+    content: 'block* | inline*'
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Content expressions use a regex-like syntax: `*` means zero or more, `+` means one or more, `?` means zero or one.
+</Note>
+
+### Node Attributes
+
+Attributes store data on nodes:
+
+```typescript
+import { NodeExtension, NodeExtensionSpec } from '@remirror/core';
+
+class ImageExtension extends NodeExtension {
+  get name() {
+    return 'image' as const;
+  }
+  
+  createNodeSpec(extra, override): NodeExtensionSpec {
+    return {
+      inline: true,
+      attrs: {
+        // Required attribute
+        src: { default: null },
+        
+        // Optional attributes with defaults
+        alt: { default: '' },
+        title: { default: '' },
+        
+        // Numeric attributes
+        width: { default: null },
+        height: { default: null },
+        
+        // Extra attributes from manager/extension
+        ...extra.defaults(),
+      },
+      
+      parseDOM: [{
+        tag: 'img[src]',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            src: element.getAttribute('src'),
+            alt: element.getAttribute('alt') || '',
+            title: element.getAttribute('title') || '',
+            width: element.getAttribute('width') || null,
+            height: element.getAttribute('height') || null,
+            ...extra.parse(dom),
+          };
+        },
+      }],
+      
+      toDOM: (node) => [
+        'img',
+        {
+          src: node.attrs.src,
+          alt: node.attrs.alt,
+          title: node.attrs.title,
+          width: node.attrs.width,
+          height: node.attrs.height,
+          ...extra.dom(node),
+        },
+      ],
+    };
+  }
+}
+```
+
+### Node Groups and Tags
+
+Groups organize nodes for content expressions:
+
+```typescript
+import { NodeExtension, ExtensionTag } from '@remirror/core';
+
+class HeadingExtension extends NodeExtension {
+  get name() {
+    return 'heading' as const;
+  }
+  
+  // Tags provide semantic grouping
+  createTags() {
+    return [
+      ExtensionTag.Block,
+      ExtensionTag.TextBlock,
+      ExtensionTag.FormattingNode,
+    ];
+  }
+  
+  createNodeSpec(extra, override): NodeExtensionSpec {
+    return {
+      content: 'inline*',
+      
+      // Add to 'block' group for content expressions
+      group: 'block',
+      
+      // Can also be: 'block inline' for multiple groups
+      
+      attrs: {
+        level: { default: 1 },
+        ...extra.defaults(),
+      },
+      
+      // Define as a heading boundary
+      defining: true,
+      
+      parseDOM: [
+        { tag: 'h1', attrs: { level: 1 } },
+        { tag: 'h2', attrs: { level: 2 } },
+        { tag: 'h3', attrs: { level: 3 } },
+        { tag: 'h4', attrs: { level: 4 } },
+        { tag: 'h5', attrs: { level: 5 } },
+        { tag: 'h6', attrs: { level: 6 } },
+      ],
+      
+      toDOM: (node) => [
+        `h${node.attrs.level}`,
+        extra.dom(node),
+        0,
+      ],
+    };
+  }
+}
+```
+
+## Mark Specifications
+
+### Basic Mark Spec
+
+Marks annotate ranges of content:
+
+```typescript
+import {
+  MarkExtension,
+  MarkExtensionSpec,
+  ApplySchemaAttributes,
+  MarkSpecOverride,
+} from '@remirror/core';
+
+class LinkExtension extends MarkExtension {
+  get name() {
+    return 'link' as const;
+  }
+  
+  createMarkSpec(
+    extra: ApplySchemaAttributes,
+    override: MarkSpecOverride
+  ): MarkExtensionSpec {
+    return {
+      ...override,
+      
+      attrs: {
+        href: { default: null },
+        title: { default: null },
+        target: { default: null },
+        ...extra.defaults(),
+      },
+      
+      // Whether marks of this type can overlap
+      inclusive: false,
+      
+      // Parse from HTML
+      parseDOM: [
+        {
+          tag: 'a[href]',
+          getAttrs: (dom) => {
+            const element = dom as HTMLElement;
+            return {
+              href: element.getAttribute('href'),
+              title: element.getAttribute('title'),
+              target: element.getAttribute('target'),
+              ...extra.parse(dom),
+            };
+          },
+        },
+        ...(override.parseDOM ?? []),
+      ],
+      
+      // Serialize to HTML
+      toDOM: (mark) => [
+        'a',
+        {
+          href: mark.attrs.href,
+          title: mark.attrs.title,
+          target: mark.attrs.target,
+          ...extra.dom(mark),
+        },
+        0,
+      ],
+    };
+  }
+}
+```
+
+### Mark Exclusion and Grouping
+
+```typescript
+import { MarkExtension, MarkExtensionSpec } from '@remirror/core';
+
+class CodeExtension extends MarkExtension {
+  get name() {
+    return 'code' as const;
+  }
+  
+  createMarkSpec(extra, override): MarkExtensionSpec {
+    return {
+      // Exclude other marks when code is active
+      excludes: '_', // '_' means all marks
+      
+      // Or exclude specific marks
+      // excludes: 'link bold italic',
+      
+      // Marks in same group are mutually exclusive
+      group: 'fontStyle',
+      
+      attrs: extra.defaults(),
+      
+      parseDOM: [
+        { tag: 'code', getAttrs: extra.parse },
+      ],
+      
+      toDOM: (mark) => ['code', extra.dom(mark), 0],
+    };
+  }
+}
+```
+
+<Tip>
+  Use `excludes: '_'` for marks that should exist alone (like code). Use `group` for mutually exclusive marks within a category (like text alignment marks).
+</Tip>
+
+## Schema Extension
+
+Remirror's `SchemaExtension` builds the schema automatically:
+
+```typescript
+// From: ~/workspace/source/packages/remirror__core/src/builtins/schema-extension.ts:102
+
+@extension({ defaultPriority: ExtensionPriority.Highest })
+export class SchemaExtension extends PlainExtension {
+  /**
+   * Create the schema from all node and mark extensions
+   */
+  onCreate(): void {
+    const { extensions, managerSettings } = this.store;
+    
+    // Build nodes object
+    const nodes: Record<string, NodeSpec> = {};
+    const marks: Record<string, MarkSpec> = {};
+    
+    // Process each extension
+    for (const extension of extensions) {
+      if (isNodeExtension(extension)) {
+        const { spec } = createSpec({
+          createExtensionSpec: (extra, override) => 
+            extension.createNodeSpec(extra, override),
+          extraAttributes: this.getExtraAttributes(extension),
+        });
+        
+        nodes[extension.name] = spec;
+      }
+      
+      if (isMarkExtension(extension)) {
+        const { spec } = createSpec({
+          createExtensionSpec: (extra, override) => 
+            extension.createMarkSpec(extra, override),
+          extraAttributes: this.getExtraAttributes(extension),
+        });
+        
+        marks[extension.name] = spec;
+      }
+    }
+    
+    // Create schema
+    const schema = new Schema({ nodes, marks });
+    this.store.setStoreKey('schema', schema);
+  }
+}
+```
+
+## Extra Attributes
+
+Add attributes to nodes/marks without modifying extensions:
+
+```typescript
+import { RemirrorManager } from '@remirror/core';
+import { BoldExtension, ParagraphExtension } from '@remirror/core';
+
+const manager = RemirrorManager.create(
+  [new BoldExtension(), new ParagraphExtension()],
+  {
+    extraAttributes: [
+      {
+        // Add to all nodes
+        identifiers: 'nodes',
+        attributes: {
+          id: {
+            default: null,
+            parseDOM: (dom) => dom.getAttribute('data-id'),
+            toDOM: (attrs) => ['data-id', attrs.id],
+          },
+        },
+      },
+      {
+        // Add to specific nodes
+        identifiers: ['paragraph', 'heading'],
+        attributes: {
+          alignment: {
+            default: 'left',
+            parseDOM: (dom) => 
+              (dom as HTMLElement).style.textAlign || 'left',
+            toDOM: (attrs) => ({ style: `text-align: ${attrs.alignment}` }),
+          },
+        },
+      },
+      {
+        // Add by tag
+        identifiers: [ExtensionTag.Block],
+        attributes: {
+          indent: {
+            default: 0,
+            parseDOM: (dom) => {
+              const padding = (dom as HTMLElement).style.paddingLeft;
+              return padding ? parseInt(padding) / 20 : 0;
+            },
+            toDOM: (attrs) => 
+              attrs.indent > 0 
+                ? { style: `padding-left: ${attrs.indent * 20}px` }
+                : {},
+          },
+        },
+      },
+    ],
+  }
+);
+```
+
+### Dynamic Attributes
+
+Attributes computed at runtime:
+
+```typescript
+import { RemirrorManager } from '@remirror/core';
+import { ParagraphExtension } from '@remirror/core';
+
+const manager = RemirrorManager.create([new ParagraphExtension()], {
+  extraAttributes: [
+    {
+      identifiers: ['paragraph'],
+      attributes: {
+        // Function generates value when node is created
+        id: {
+          default: () => `p-${Math.random().toString(36).substr(2, 9)}`,
+        },
+        
+        // Function receives node and generates value
+        hash: (node) => {
+          const content = node.textContent;
+          return hashString(content);
+        },
+        
+        created: {
+          default: () => Date.now(),
+        },
+      },
+    },
+  ],
+});
+```
+
+## Schema Validation
+
+### Content Validation
+
+Schemas automatically validate content structure:
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+
+class TableExtension extends NodeExtension {
+  get name() {
+    return 'table' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      content: 'tableRow+',
+      tableRole: 'table',
+      isolating: true,
+      group: 'block',
+      attrs: extra.defaults(),
+      parseDOM: [{ tag: 'table', getAttrs: extra.parse }],
+      toDOM: (node) => ['table', extra.dom(node), ['tbody', 0]],
+    };
+  }
+}
+
+class TableRowExtension extends NodeExtension {
+  get name() {
+    return 'tableRow' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      content: 'tableCell+',
+      tableRole: 'row',
+      attrs: extra.defaults(),
+      parseDOM: [{ tag: 'tr', getAttrs: extra.parse }],
+      toDOM: (node) => ['tr', extra.dom(node), 0],
+    };
+  }
+}
+
+// Schema ensures:
+// - Tables can only contain rows
+// - Rows can only contain cells
+// - Structure is always valid
+```
+
+### Custom Validation
+
+Add validation in commands:
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+
+class ListExtension extends NodeExtension {
+  @command()
+  createList(): CommandFunction {
+    return ({ state, dispatch, tr }) => {
+      const { $from } = state.selection;
+      
+      // Validate: can we insert a list here?
+      const index = $from.index();
+      if (!$from.parent.canReplaceWith(index, index, this.type)) {
+        return false;
+      }
+      
+      // Validate: is selection in valid position?
+      if ($from.parent.type.spec.isolating) {
+        return false;
+      }
+      
+      if (!dispatch) {
+        return true;
+      }
+      
+      // Create list
+      const listNode = this.type.create();
+      tr.replaceSelectionWith(listNode);
+      dispatch(tr);
+      
+      return true;
+    };
+  }
+}
+```
+
+## Document Structure
+
+### The Doc Node
+
+Every schema needs a top-level `doc` node:
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+
+class DocExtension extends NodeExtension {
+  get name() {
+    return 'doc' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      // Top-level content rule
+      content: 'block+',
+      
+      // Doc has no attributes typically
+      attrs: extra.defaults(),
+    };
+  }
+}
+```
+
+### Text Node
+
+The special text node:
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+
+class TextExtension extends NodeExtension {
+  get name() {
+    return 'text' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      // Text nodes are always inline
+      group: 'inline',
+    };
+  }
+}
+```
+
+<Note>
+  The `doc` and `text` nodes are special—they're automatically included by Remirror's preset system and rarely need custom implementation.
+</Note>
+
+## Schema Querying
+
+Access schema information at runtime:
+
+```typescript
+import { useRemirrorContext } from '@remirror/react';
+
+function SchemaInspector() {
+  const { getState } = useRemirrorContext();
+  const state = getState();
+  const { schema } = state;
+  
+  // Get node types
+  const nodeTypes = Object.keys(schema.nodes);
+  console.log('Available nodes:', nodeTypes);
+  
+  // Get mark types
+  const markTypes = Object.keys(schema.marks);
+  console.log('Available marks:', markTypes);
+  
+  // Check specific types
+  const paragraphType = schema.nodes.paragraph;
+  const boldType = schema.marks.bold;
+  
+  // Inspect spec
+  console.log('Paragraph content:', paragraphType.spec.content);
+  console.log('Bold excludes:', boldType.spec.excludes);
+  
+  return <div>Check console for schema info</div>;
+}
+```
+
+## Advanced Schema Patterns
+
+### Nested Structures
+
+```typescript
+class NestedListExtension extends NodeExtension {
+  get name() {
+    return 'bulletList' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      // List items can contain nested lists
+      content: 'listItem+',
+      group: 'block',
+      attrs: extra.defaults(),
+      parseDOM: [{ tag: 'ul', getAttrs: extra.parse }],
+      toDOM: (node) => ['ul', extra.dom(node), 0],
+    };
+  }
+}
+
+class ListItemExtension extends NodeExtension {
+  get name() {
+    return 'listItem' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      // Paragraph followed by optional nested list
+      content: 'paragraph (bulletList | orderedList)?',
+      defining: true,
+      attrs: extra.defaults(),
+      parseDOM: [{ tag: 'li', getAttrs: extra.parse }],
+      toDOM: (node) => ['li', extra.dom(node), 0],
+    };
+  }
+}
+```
+
+### Isolated Nodes
+
+```typescript
+class CodeBlockExtension extends NodeExtension {
+  get name() {
+    return 'codeBlock' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      content: 'text*',
+      group: 'block',
+      
+      // Prevents other nodes from being inserted
+      isolating: true,
+      
+      // Code doesn't accept marks
+      marks: '',
+      
+      // Preserve whitespace
+      preserveWhitespace: 'full',
+      
+      attrs: {
+        language: { default: null },
+        ...extra.defaults(),
+      },
+      
+      parseDOM: [{
+        tag: 'pre',
+        preserveWhitespace: 'full',
+        getAttrs: (dom) => {
+          const code = (dom as HTMLElement).querySelector('code');
+          const language = code?.getAttribute('class')?.match(/language-(\w+)/)?.[1];
+          return { language, ...extra.parse(dom) };
+        },
+      }],
+      
+      toDOM: (node) => [
+        'pre',
+        extra.dom(node),
+        [
+          'code',
+          node.attrs.language
+            ? { class: `language-${node.attrs.language}` }
+            : {},
+          0,
+        ],
+      ],
+    };
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Node Views" icon="eye" href="./node-views">
+    Custom rendering with React components
+  </Card>
+  <Card title="Commands" icon="terminal" href="./commands">
+    Manipulate document structure
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/concepts/extensions">
+    Build custom extensions
+  </Card>
+  <Card title="Content" icon="file-lines" href="/guides/content">
+    Work with document content
+  </Card>
+</CardGroup>

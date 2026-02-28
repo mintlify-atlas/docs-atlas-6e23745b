@@ -1,0 +1,298 @@
+---
+title: Contributing
+description: Learn how to contribute to Remirror - setup, development workflow, testing, and code guidelines
+---
+
+Help make Remirror better by contributing to the project. This guide covers everything you need to know to get started.
+
+## Getting Started
+
+<Steps>
+  <Step title="Fork and Clone">
+    Fork the [Remirror repository](https://github.com/remirror/remirror), clone your fork, and add the upstream remote:
+
+    ```bash
+    git clone <<FORKED_REPO_URL>>
+    cd remirror
+    git remote add upstream https://github.com/remirror/remirror
+    ```
+  </Step>
+
+  <Step title="Enable Corepack">
+    You'll need [`corepack`](https://github.com/nodejs/corepack) enabled to use [`pnpm`](https://pnpm.js.org):
+
+    ```bash
+    corepack enable
+    pnpm --version
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    Install all dependencies and create a new branch:
+
+    ```bash
+    pnpm install
+    git checkout -b <<SOME_BRANCH_NAME>>
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  If you have a previous version checked out, clean your `node_modules` first:
+  
+  ```bash
+  pnpm clean:all
+  pnpm install
+  # Or use the combined command
+  pnpm refresh
+  ```
+</Note>
+
+## Development Workflow
+
+<AccordionGroup>
+  <Accordion title="General Development">
+    Run the watch command to compile code automatically as you make changes:
+
+    ```bash
+    pnpm run watch
+    ```
+
+    This uses `esbuild` for most packages and executes custom build scripts where needed (e.g., `@remirror/theme` uses `babel` and `linaria`).
+
+    **Debug Mode:**
+    ```bash
+    # for Linux and macOS
+    export DEBUG=true
+    pnpm run watch
+    ```
+
+    **Build Once:**
+    ```bash
+    pnpm run build
+    ```
+
+    **Build Specific Packages:**
+    ```bash
+    pnpm remirror-cli build @remirror/extension-bold @remirror/extension-italic
+    ```
+  </Accordion>
+
+  <Accordion title="Storybook Development">
+    Launch Storybook for interactive component development:
+
+    ```bash
+    pnpm run storybook
+    ```
+
+    <Note>
+      Storybook automatically runs `pnpm run watch`, so you don't need to run it separately.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Documentation">
+    Launch the documentation site locally:
+
+    ```bash
+    pnpm docs:dev
+    ```
+
+    Navigate to `http://localhost:3000` once the build completes.
+
+    **Generate Documentation:**
+    ```bash
+    pnpm generate:docs
+    ```
+
+    Select from packages, extensions, or commands.
+
+    **Documentation Tips:**
+    - **What** is this? (concise introduction)
+    - **Why** does it exist? (problem solved, features enabled)
+    - **How** do I use it? (installation, examples, guides)
+  </Accordion>
+</AccordionGroup>
+
+## Project Structure
+
+<CardGroup cols={2}>
+  <Card title=".github" icon="github">
+    GitHub-specific configuration for workflows, issue templates, and PR templates
+  </Card>
+  <Card title="docs" icon="book">
+    Documentation files used by the docusaurus website
+  </Card>
+  <Card title="packages" icon="box">
+    All Remirror packages including top-level packages and scoped `@remirror/*` packages
+  </Card>
+  <Card title="support" icon="wrench">
+    Configuration files, website, and other supporting resources
+  </Card>
+</CardGroup>
+
+## Testing
+
+<Tabs>
+  <Tab title="Unit Tests">
+    Run unit tests with the following commands:
+
+    ```bash
+    pnpm test
+    pnpm test:watch
+    ```
+
+    **Test Specific Packages:**
+    ```bash
+    pnpm test extension-bold
+    pnpm test:watch extension-bold
+    ```
+
+    **Narrow Down Tests:**
+    ```bash
+    pnpm test dom.spec.ts
+    pnpm test:watch @remirror/react
+    ```
+
+    <Note>
+      Place all tests in `__tests__/` subfolder within the package being tested.
+      Use naming convention: `*.spec.ts(x)`
+    </Note>
+  </Tab>
+
+  <Tab title="E2E Tests">
+    Run end-to-end tests:
+
+    ```bash
+    pnpm e2e
+    pnpm e2e:watch
+    ```
+
+    <Note>
+      Place E2E tests in `__e2e__/` subfolder.
+      Use naming convention: `*.e2e.test.ts`
+    </Note>
+  </Tab>
+</Tabs>
+
+## Stories
+
+Stories serve as package-level documentation and building blocks for E2E tests. They focus on user experience.
+
+<Note>
+  Place stories in the `stories/` folder with the pattern `*.stories.ts(x)`
+</Note>
+
+## Pull Request Process
+
+<Steps>
+  <Step title="Create Pull Request">
+    Create a PR using GitHub following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) conventions for the PR name.
+  </Step>
+
+  <Step title="Add Description">
+    - Reference related issues
+    - The description becomes the commit message (PRs are squashed)
+    - Add screenshots for UI/design changes
+    - Use GIF tools for animated screenshots
+  </Step>
+
+  <Step title="Complete Checklist">
+    Tick off all relevant checkboxes by changing `[ ]` to `[x]`
+  </Step>
+</Steps>
+
+<Tip>
+  Commit early and often while working. All commits will be squashed before merging.
+</Tip>
+
+## Code Style Guidelines
+
+<AccordionGroup>
+  <Accordion title="General Principles">
+    - Functions with more than two arguments should use a parameter object
+    - Comment everything, even uncertainties
+    - Choose simplicity over performance initially
+  </Accordion>
+
+  <Accordion title="React Components">
+    Use `const` arrow functions for components:
+
+    ```tsx
+    import React from 'react';
+
+    const MyComponent = () => {
+      return <div />;
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Top-Level Functions">
+    Use function declarations:
+
+    ```ts
+    // ✅ GOOD
+    function doSomething(something: string) {
+      return `Cannot do ${something}`;
+    }
+
+    // ❌ BAD
+    const doSomething = (something: string) => {
+      return `Cannot do ${something}`;
+    };
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Creating Packages
+
+<Tabs>
+  <Tab title="Automated">
+    Use the package creation script:
+
+    ```bash
+    pnpm run create:package @remirror/extension-chill --description "The time to be chill."
+    ```
+  </Tab>
+
+  <Tab title="Manual">
+    1. Copy `support/templates/extension-template` to `packages/remirror__extension-<name>`
+    2. Rename `template`, `Template`, and `TEMPLATE` to your extension name
+    3. Replace `TEMPLATE_DESCRIPTION` with your description
+    4. Rename files from `template-` to `<name>-`
+    5. (Optional) Add to `remirror` package if it's commonly used
+    6. Run `pnpm i` in root
+  </Tab>
+</Tabs>
+
+## Code of Conduct
+
+### Our Pledge
+
+We pledge to make participation in our project a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
+
+### Our Standards
+
+<CardGroup cols={2}>
+  <Card title="Positive Behavior" icon="circle-check" color="#10b981">
+    - Use welcoming and inclusive language
+    - Be respectful of differing viewpoints
+    - Accept constructive criticism gracefully
+    - Focus on what's best for the community
+    - Show empathy towards others
+  </Card>
+  <Card title="Unacceptable Behavior" icon="circle-xmark" color="#ef4444">
+    - Sexualized language or unwelcome advances
+    - Trolling, insulting, or derogatory comments
+    - Public or private harassment
+    - Publishing others' private information
+    - Other unprofessional conduct
+  </Card>
+</CardGroup>
+
+### Enforcement
+
+Instances of unacceptable behavior may be reported to help@kickjump.co. All complaints will be reviewed and investigated confidentially.
+
+<Note>
+  This Code of Conduct is adapted from the [Contributor Covenant](http://contributor-covenant.org), version 1.4.
+</Note>

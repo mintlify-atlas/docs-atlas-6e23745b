@@ -1,0 +1,654 @@
+---
+title: Helper System
+description: Complete API reference for Remirror's helper system, including creating helpers, querying editor state, and built-in helper utilities.
+---
+
+# Helper System
+
+Helpers are read-only methods that query the editor state without modifying it. They provide information about the current editor state, active marks/nodes, and document structure.
+
+## Helper Function Signature
+
+Helpers are regular methods that return information:
+
+```typescript
+type Helper<ReturnType> = ReturnType
+```
+
+Unlike commands, helpers don't follow the ProseMirror command pattern. They simply return values.
+
+## Creating Helpers
+
+### Using the @helper Decorator
+
+The recommended way to create helpers in extensions:
+
+<CodeGroup>
+```typescript Basic Helper
+import { PlainExtension, helper, Helper } from 'remirror';
+
+class MyExtension extends PlainExtension {
+  get name() {
+    return 'myExtension' as const;
+  }
+
+  @helper()
+  getWordCount(): Helper<number> {
+    const text = this.store.getState().doc.textContent;
+    return text.split(/\s+/).filter(word => word.length > 0).length;
+  }
+}
+```
+
+```typescript Helper with Parameters
+@helper()
+getTextBetween(from: number, to: number): Helper<string> {
+  const state = this.store.getState();
+  return state.doc.textBetween(from, to);
+}
+
+// Usage:
+const text = helpers.getTextBetween(0, 10);
+```
+
+```typescript Complex Helper
+@helper()
+getDocumentStats(): Helper<{
+  words: number;
+  characters: number;
+  paragraphs: number;
+}> {
+  const state = this.store.getState();
+  const text = state.doc.textContent;
+  let paragraphs = 0;
+  
+  state.doc.descendants((node) => {
+    if (node.type.name === 'paragraph') {
+      paragraphs++;
+    }
+  });
+  
+  return {
+    words: text.split(/\s+/).filter(w => w.length > 0).length,
+    characters: text.length,
+    paragraphs,
+  };
+}
+```
+</CodeGroup>
+
+### Helper Decorator Options
+
+```typescript
+interface HelperDecoratorOptions {
+  /**
+   * Description of what the helper does
+   */
+  description?: string;
+}
+```
+
+<CodeGroup>
+```typescript With Description
+@helper({
+  description: 'Check if the editor contains any content',
+})
+isEmpty(): Helper<boolean> {
+  const state = this.store.getState();
+  return state.doc.textContent.length === 0;
+}
+```
+</CodeGroup>
+
+## Built-in Helpers
+
+Remirror provides several built-in helpers through the `HelpersExtension`:
+
+### isSelectionEmpty()
+
+Check if the current selection is empty (cursor).
+
+```typescript
+function isSelectionEmpty(state?: EditorState): Helper<boolean>
+```
+
+<CodeGroup>
+```typescript Usage
+if (helpers.isSelectionEmpty()) {
+  console.log('No text selected');
+}
+```
+</CodeGroup>
+
+### isViewEditable()
+
+Check if the editor view is currently editable.
+
+```typescript
+function isViewEditable(state?: EditorState): Helper<boolean>
+```
+
+<CodeGroup>
+```typescript Usage
+if (!helpers.isViewEditable()) {
+  console.log('Editor is read-only');
+}
+```
+</CodeGroup>
+
+### getJSON()
+
+Get the editor content as JSON.
+
+```typescript
+function getJSON(state?: EditorState): Helper<RemirrorJSON>
+```
+
+<CodeGroup>
+```typescript Export Content
+const json = helpers.getJSON();
+console.log(JSON.stringify(json, null, 2));
+```
+
+```typescript Save to Database
+const documentData = {
+  content: helpers.getJSON(),
+  updatedAt: new Date(),
+};
+
+await saveDocument(documentData);
+```
+</CodeGroup>
+
+### getStateJSON()
+
+Get the full editor state as JSON (includes selection).
+
+```typescript
+function getStateJSON(state?: EditorState): Helper<StateJSON>
+```
+
+### getHTML()
+
+Get the editor content as HTML string.
+
+```typescript
+function getHTML(state?: EditorState): Helper<string>
+```
+
+<CodeGroup>
+```typescript Export HTML
+const html = helpers.getHTML();
+console.log(html);
+// <p>Hello <strong>world</strong></p>
+```
+
+```typescript Copy to Clipboard
+const html = helpers.getHTML();
+navigator.clipboard.writeText(html);
+```
+</CodeGroup>
+
+### getText()
+
+Get plain text content (strips formatting).
+
+```typescript
+function getText(state?: EditorState, lineBreak?: string): Helper<string>
+```
+
+<ParamField path="state" type="EditorState">
+  Editor state to extract text from (defaults to current)
+</ParamField>
+
+<ParamField path="lineBreak" type="string" default="\n">
+  String to use for line breaks
+</ParamField>
+
+<CodeGroup>
+```typescript Basic Usage
+const text = helpers.getText();
+console.log(text);
+// Hello world
+```
+
+```typescript Custom Line Breaks
+const text = helpers.getText(undefined, '\r\n');
+```
+</CodeGroup>
+
+## Active State Helpers
+
+Remirror automatically generates helpers for checking active marks and nodes:
+
+### active.*
+
+Check if a mark or node is active at the current selection.
+
+```typescript
+interface ActiveHelpers {
+  [extensionName: string]: (attrs?: ProsemirrorAttributes) => boolean;
+}
+```
+
+<CodeGroup>
+```typescript Check Active Marks
+if (helpers.active.bold()) {
+  console.log('Text is bold');
+}
+
+if (helpers.active.link()) {
+  console.log('Selection contains a link');
+}
+```
+
+```typescript Check with Attributes
+if (helpers.active.heading({ level: 1 })) {
+  console.log('Current node is H1');
+}
+
+if (helpers.active.link({ href: 'https://remirror.io' })) {
+  console.log('Selection has specific link');
+}
+```
+
+```typescript Check Active Nodes
+if (helpers.active.paragraph()) {
+  console.log('Inside a paragraph');
+}
+
+if (helpers.active.codeBlock({ language: 'typescript' })) {
+  console.log('Inside TypeScript code block');
+}
+```
+</CodeGroup>
+
+### attrs.*
+
+Get attributes from the active mark or node.
+
+```typescript
+interface AttrsHelpers {
+  [extensionName: string]: (attrs?: ProsemirrorAttributes) => ProsemirrorAttributes | undefined;
+}
+```
+
+<CodeGroup>
+```typescript Get Mark Attributes
+const linkAttrs = helpers.attrs.link();
+if (linkAttrs) {
+  console.log('Link href:', linkAttrs.href);
+  console.log('Link target:', linkAttrs.target);
+}
+```
+
+```typescript Get Node Attributes
+const headingAttrs = helpers.attrs.heading();
+if (headingAttrs) {
+  console.log('Heading level:', headingAttrs.level);
+}
+```
+
+```typescript Filter by Attributes
+const linkWithHref = helpers.attrs.link({ href: 'https://remirror.io' });
+if (linkWithHref) {
+  console.log('Found matching link');
+}
+```
+</CodeGroup>
+
+## Document Query Helpers
+
+Common patterns for querying document structure:
+
+<CodeGroup>
+```typescript Node Traversal
+@helper()
+findAllNodesOfType(typeName: string): Helper<Array<{ node: ProsemirrorNode; pos: number }>> {
+  const state = this.store.getState();
+  const results: Array<{ node: ProsemirrorNode; pos: number }> = [];
+  
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === typeName) {
+      results.push({ node, pos });
+    }
+  });
+  
+  return results;
+}
+```
+
+```typescript Text Search
+@helper()
+findText(searchTerm: string): Helper<number[]> {
+  const state = this.store.getState();
+  const text = state.doc.textContent;
+  const positions: number[] = [];
+  
+  let index = text.indexOf(searchTerm);
+  while (index !== -1) {
+    positions.push(index);
+    index = text.indexOf(searchTerm, index + 1);
+  }
+  
+  return positions;
+}
+```
+
+```typescript Selection Info
+@helper()
+getSelectionInfo(): Helper<{
+  from: number;
+  to: number;
+  empty: boolean;
+  text: string;
+}> {
+  const state = this.store.getState();
+  const { from, to, empty } = state.selection;
+  
+  return {
+    from,
+    to,
+    empty,
+    text: state.doc.textBetween(from, to),
+  };
+}
+```
+
+```typescript Mark Detection
+@helper()
+getActiveMarks(): Helper<string[]> {
+  const state = this.store.getState();
+  const { $from } = state.selection;
+  
+  return $from.marks().map(mark => mark.type.name);
+}
+```
+</CodeGroup>
+
+## Utility Helpers
+
+Helper methods for common document operations:
+
+<CodeGroup>
+```typescript Node at Position
+@helper()
+getNodeAtPosition(pos: number): Helper<ProsemirrorNode | null> {
+  const state = this.store.getState();
+  return state.doc.nodeAt(pos);
+}
+```
+
+```typescript Parent Node
+@helper()
+getParentNode(): Helper<ProsemirrorNode | null> {
+  const state = this.store.getState();
+  const { $from } = state.selection;
+  return $from.parent;
+}
+```
+
+```typescript Document Size
+@helper()
+getDocumentSize(): Helper<number> {
+  const state = this.store.getState();
+  return state.doc.nodeSize;
+}
+```
+
+```typescript Resolve Position
+@helper()
+resolvePosition(pos: number): Helper<ResolvedPos | null> {
+  const state = this.store.getState();
+  
+  try {
+    return state.doc.resolve(pos);
+  } catch {
+    return null;
+  }
+}
+```
+</CodeGroup>
+
+## React Integration
+
+Helpers are commonly used in React components:
+
+<CodeGroup>
+```tsx Word Count Display
+import { useHelpers } from '@remirror/react';
+
+function WordCount() {
+  const helpers = useHelpers();
+  const wordCount = helpers.getWordCount();
+  
+  return <div>Words: {wordCount}</div>;
+}
+```
+
+```tsx Active State UI
+import { useActive } from '@remirror/react';
+
+function FormatToolbar() {
+  const active = useActive();
+  
+  return (
+    <div>
+      <button
+        className={active.bold() ? 'active' : ''}
+        onClick={() => commands.toggleBold()}
+      >
+        Bold
+      </button>
+      <button
+        className={active.italic() ? 'active' : ''}
+        onClick={() => commands.toggleItalic()}
+      >
+        Italic
+      </button>
+    </div>
+  );
+}
+```
+
+```tsx Custom Hook
+import { useHelpers } from '@remirror/react';
+import { useEffect, useState } from 'react';
+
+function useDocumentStats() {
+  const helpers = useHelpers();
+  const [stats, setStats] = useState({ words: 0, chars: 0 });
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const text = helpers.getText();
+      setStats({
+        words: text.split(/\s+/).filter(w => w.length > 0).length,
+        chars: text.length,
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [helpers]);
+  
+  return stats;
+}
+```
+</CodeGroup>
+
+## Helper vs Command
+
+Understanding when to use helpers vs commands:
+
+<AccordionGroup>
+  <Accordion title="Use Helpers When...">
+    - Reading editor state
+    - Checking active marks/nodes
+    - Getting document content
+    - Querying selection
+    - Calculating derived data
+    - No state modification needed
+    
+    ```typescript
+    @helper()
+    isEditorEmpty(): Helper<boolean> {
+      return this.store.getState().doc.textContent.length === 0;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Commands When...">
+    - Modifying editor state
+    - Inserting/deleting content
+    - Changing selection
+    - Adding/removing marks
+    - Transforming document structure
+    
+    ```typescript
+    @command()
+    clearContent(): CommandFunction {
+      return ({ tr, dispatch }) => {
+        if (dispatch) {
+          tr.deleteRange(0, tr.doc.content.size);
+          dispatch(tr);
+        }
+        return true;
+      };
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Helpers Pure">
+    Helpers should be side-effect free and only read state.
+    
+    ```typescript
+    // GOOD ✅
+    @helper()
+    getDocumentLength(): Helper<number> {
+      return this.store.getState().doc.content.size;
+    }
+    
+    // BAD ❌ - has side effects
+    @helper()
+    logAndGetLength(): Helper<number> {
+      console.log('Getting length'); // Side effect!
+      return this.store.getState().doc.content.size;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache Expensive Computations">
+    For helpers that perform expensive calculations, consider caching.
+    
+    ```typescript
+    private cachedWordCount: number | null = null;
+    
+    onCreate(): void {
+      this.store.manager.addHandler('stateUpdate', () => {
+        this.cachedWordCount = null; // Invalidate cache
+      });
+    }
+    
+    @helper()
+    getWordCount(): Helper<number> {
+      if (this.cachedWordCount !== null) {
+        return this.cachedWordCount;
+      }
+      
+      const text = this.store.getState().doc.textContent;
+      this.cachedWordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+      return this.cachedWordCount;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Provide Type-Safe Returns">
+    Always specify the return type with the Helper type.
+    
+    ```typescript
+    // GOOD ✅
+    @helper()
+    getStats(): Helper<{ words: number; chars: number }> {
+      const text = this.store.getState().doc.textContent;
+      return {
+        words: text.split(/\s+/).length,
+        chars: text.length,
+      };
+    }
+    
+    // BAD ❌ - no type safety
+    @helper()
+    getStats() {
+      const text = this.store.getState().doc.textContent;
+      return {
+        words: text.split(/\s+/).length,
+        chars: text.length,
+      };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Edge Cases">
+    Always validate inputs and handle undefined/null cases.
+    
+    ```typescript
+    @helper()
+    getNodeAtPosition(pos: number): Helper<ProsemirrorNode | null> {
+      const state = this.store.getState();
+      
+      // Validate position
+      if (pos < 0 || pos > state.doc.content.size) {
+        return null;
+      }
+      
+      return state.doc.nodeAt(pos);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Type Definitions
+
+```typescript
+type Helper<ReturnType> = ReturnType;
+
+interface HelperDecoratorOptions {
+  description?: string;
+}
+
+type ExtensionHelperReturn = Record<string, (...args: any[]) => any>;
+
+interface ActiveHelpers {
+  [extensionName: string]: (attrs?: ProsemirrorAttributes) => boolean;
+}
+
+interface AttrsHelpers {
+  [extensionName: string]: (
+    attrs?: ProsemirrorAttributes
+  ) => ProsemirrorAttributes | undefined;
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Extension Base Class" icon="puzzle-piece" href="/api/core/extension">
+    Learn how to create extensions with helpers
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/api/core/commands">
+    Modify editor state with commands
+  </Card>
+  
+  <Card title="RemirrorManager" icon="gears" href="/api/core/manager">
+    Access helpers through the manager
+  </Card>
+  
+  <Card title="React Hooks" icon="react" href="/api/react/hooks">
+    Use helpers in React components
+  </Card>
+</CardGroup>

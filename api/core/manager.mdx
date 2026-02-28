@@ -1,0 +1,517 @@
+---
+title: RemirrorManager
+description: Complete API reference for the RemirrorManager class that orchestrates extensions and manages the ProseMirror editor lifecycle.
+---
+
+# RemirrorManager
+
+The `RemirrorManager` is the central orchestrator for your Remirror editor. It manages the lifecycle of extensions, creates the ProseMirror schema, handles state updates, and provides access to commands and helpers.
+
+## Creating a Manager
+
+### RemirrorManager.create()
+
+Static factory method to create a new manager instance.
+
+```typescript
+static create<Extension extends AnyExtension>(
+  extensions: Extension[] | ExtensionTemplate<Extension>,
+  settings?: Remirror.ManagerSettings
+): RemirrorManager<Extension | BuiltinPreset>
+```
+
+<ParamField path="extensions" type="Extension[] | ExtensionTemplate<Extension>" required>
+  Array of extension instances or a function that returns them. Extensions define the editor's behavior and schema.
+</ParamField>
+
+<ParamField path="settings" type="Remirror.ManagerSettings">
+  Optional configuration for the manager.
+  
+  <ParamField path="priority" type="Record<string, ExtensionPriority>">
+    Override extension priorities by name
+  </ParamField>
+  
+  <ParamField path="exclude" type="ExcludeOptions">
+    Exclude certain functionality from extensions
+  </ParamField>
+  
+  <ParamField path="onError" type="InvalidContentHandler">
+    Error handler for invalid JSON content
+  </ParamField>
+  
+  <ParamField path="stringHandler" type="keyof Remirror.StringHandlers | StringHandler">
+    Function to transform strings into ProseMirror nodes
+  </ParamField>
+  
+  <ParamField path="defaultSelection" type="'start' | 'end' | 'all'" default="end">
+    Default selection when creating state
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```typescript Basic Usage
+import { RemirrorManager } from 'remirror';
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+
+const manager = RemirrorManager.create([
+  new BoldExtension(),
+  new ItalicExtension(),
+]);
+```
+
+```typescript With Settings
+const manager = RemirrorManager.create(
+  [new BoldExtension(), new ItalicExtension()],
+  {
+    onError: ({ json, invalidContent, transformers }) => {
+      return transformers.remove(json, invalidContent);
+    },
+    defaultSelection: 'start',
+  }
+);
+```
+
+```typescript Template Function
+const template = () => [
+  new BoldExtension(),
+  new ItalicExtension(),
+];
+
+const manager = RemirrorManager.create(template);
+```
+</CodeGroup>
+
+## Properties
+
+### store
+
+Access the manager store containing the editor state and APIs.
+
+```typescript
+get store(): Remirror.ManagerStore<Extension>
+```
+
+<ResponseField name="store" type="Remirror.ManagerStore<Extension>">
+  The extension manager store containing:
+  
+  <ResponseField name="view" type="EditorView">
+    The ProseMirror editor view instance
+  </ResponseField>
+  
+  <ResponseField name="schema" type="EditorSchema">
+    The ProseMirror schema generated from extensions
+  </ResponseField>
+  
+  <ResponseField name="nodes" type="Record<string, NodeExtensionSpec>">
+    All registered node specs
+  </ResponseField>
+  
+  <ResponseField name="marks" type="Record<string, MarkExtensionSpec>">
+    All registered mark specs
+  </ResponseField>
+  
+  <ResponseField name="tags" type="CombinedTags">
+    Extension tags for grouping extensions
+  </ResponseField>
+  
+  <ResponseField name="commands" type="Commands">
+    All available editor commands
+  </ResponseField>
+  
+  <ResponseField name="helpers" type="Helpers">
+    All available helper methods
+  </ResponseField>
+  
+  <ResponseField name="chain" type="Chain">
+    Chainable command interface
+  </ResponseField>
+</ResponseField>
+
+<CodeGroup>
+```typescript Accessing Store
+const { view, schema, commands } = manager.store;
+
+// Use commands
+commands.insertText('Hello world');
+
+// Access schema
+console.log(schema.nodes);
+```
+
+```typescript Chainable Commands
+manager.store.chain
+  .insertText('Bold text')
+  .toggleBold()
+  .run();
+```
+</CodeGroup>
+
+### extensions
+
+Array of all extension instances managed by this manager.
+
+```typescript
+get extensions(): ReadonlyArray<GetExtensions<Extension>>
+```
+
+### schema
+
+The ProseMirror schema generated from all extensions.
+
+```typescript
+get schema(): EditorSchema
+```
+
+### view
+
+The ProseMirror EditorView instance (available after `addView()` is called).
+
+```typescript
+get view(): EditorView
+```
+
+### tr
+
+The current shared transaction for chainable commands.
+
+```typescript
+get tr(): Transaction
+```
+
+### nodes
+
+All node specifications registered by node extensions.
+
+```typescript
+get nodes(): Record<this['~N'], NodeExtensionSpec>
+```
+
+### marks
+
+All mark specifications registered by mark extensions.
+
+```typescript
+get marks(): Record<this['~M'], MarkExtensionSpec>
+```
+
+### mounted
+
+Returns `true` when the view has been added and the editor is running.
+
+```typescript
+get mounted(): boolean
+```
+
+### destroyed
+
+Returns `true` if the manager has been destroyed.
+
+```typescript
+get destroyed(): boolean
+```
+
+### output
+
+Framework-specific output (e.g., React hooks, Vue composables).
+
+```typescript
+get output(): FrameworkOutput<Extension> | undefined
+```
+
+## Methods
+
+### createState()
+
+Create an EditorState from content.
+
+```typescript
+createState(props?: CreateEditorStateProps): EditorState
+```
+
+<ParamField path="props" type="CreateEditorStateProps">
+  <ParamField path="content" type="RemirrorContentType">
+    String, JSON, or ProseMirrorNode for initial content
+  </ParamField>
+  
+  <ParamField path="selection" type="PrimitiveSelection" default="end">
+    Initial selection position
+  </ParamField>
+  
+  <ParamField path="stringHandler" type="keyof Remirror.StringHandlers | StringHandler">
+    Custom string-to-node transformer
+  </ParamField>
+</ParamField>
+
+<CodeGroup>
+```typescript Empty State
+const state = manager.createState();
+```
+
+```typescript With Content
+const state = manager.createState({
+  content: '<p>Hello <strong>world</strong></p>',
+  stringHandler: 'html',
+  selection: 'start',
+});
+```
+
+```typescript JSON Content
+const state = manager.createState({
+  content: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Hello' }],
+      },
+    ],
+  },
+});
+```
+</CodeGroup>
+
+### createEmptyDoc()
+
+Create an empty document node based on the schema.
+
+```typescript
+createEmptyDoc(): ProsemirrorNode
+```
+
+### addView()
+
+Attach the ProseMirror EditorView to the manager.
+
+```typescript
+addView(view: EditorView): this
+```
+
+<Info>
+This is typically called by framework integrations (React, Vue, etc.). You rarely need to call this directly.
+</Info>
+
+### getExtension()
+
+Retrieve a specific extension instance by its constructor.
+
+```typescript
+getExtension<ExtensionConstructor extends AnyExtensionConstructor>(
+  Constructor: ExtensionConstructor
+): InstanceType<ExtensionConstructor>
+```
+
+<CodeGroup>
+```typescript Get Extension
+import { BoldExtension } from 'remirror/extensions';
+
+const boldExtension = manager.getExtension(BoldExtension);
+
+// Access extension methods
+boldExtension.setOptions({ weight: '600' });
+```
+</CodeGroup>
+
+### hasExtension()
+
+Check if an extension is present in the manager.
+
+```typescript
+hasExtension<ExtensionConstructor extends AnyExtensionConstructor>(
+  Constructor: ExtensionConstructor
+): boolean
+```
+
+### addHandler()
+
+Subscribe to manager events.
+
+```typescript
+addHandler<Key extends keyof ManagerEvents>(
+  event: Key,
+  cb: ManagerEvents[Key]
+): Unsubscribe
+```
+
+<ParamField path="event" type="'stateUpdate' | 'clone' | 'recreate' | 'destroy'" required>
+  The event to listen to
+</ParamField>
+
+<CodeGroup>
+```typescript State Updates
+const unsubscribe = manager.addHandler('stateUpdate', (props) => {
+  console.log('State updated:', props.state);
+});
+
+// Later, stop listening
+unsubscribe();
+```
+
+```typescript Destroy Event
+manager.addHandler('destroy', () => {
+  console.log('Manager destroyed');
+});
+```
+</CodeGroup>
+
+### onStateUpdate()
+
+Manually trigger state update handlers (called by the framework).
+
+```typescript
+onStateUpdate(props: Omit<StateUpdateLifecycleProps, 'firstUpdate'>): void
+```
+
+### clone()
+
+Create a copy of the manager with the same extensions and settings.
+
+```typescript
+clone(): RemirrorManager<Extension>
+```
+
+### recreate()
+
+Recreate the manager with additional extensions and settings.
+
+```typescript
+recreat<ExtraExtension extends AnyExtension>(
+  extensions?: ExtraExtension[],
+  settings?: Remirror.ManagerSettings
+): RemirrorManager<Extension | ExtraExtension>
+```
+
+### destroy()
+
+Destroy the manager and clean up all resources.
+
+```typescript
+destroy(): void
+```
+
+<Warning>
+After calling `destroy()`, the manager and its view should not be used.
+</Warning>
+
+### includes()
+
+Check if the manager includes specific extensions.
+
+```typescript
+includes(mustIncludeList: Array<AnyExtensionConstructor | string>): boolean
+```
+
+<CodeGroup>
+```typescript Check Extensions
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+
+if (manager.includes([BoldExtension, 'italic'])) {
+  console.log('Has bold and italic');
+}
+```
+</CodeGroup>
+
+## Lifecycle
+
+The manager goes through several phases:
+
+<Tabs>
+  <Tab title="Create Phase">
+    **ManagerPhase.Create**
+    
+    - Extensions are initialized
+    - Schema is created
+    - `onCreate` lifecycle methods are called
+    
+    ```typescript
+    const manager = RemirrorManager.create([...]);
+    // Manager is now in Create phase
+    ```
+  </Tab>
+  
+  <Tab title="EditorView Phase">
+    **ManagerPhase.EditorView**
+    
+    - View is attached
+    - `onView` lifecycle methods are called
+    - Commands become available
+    
+    ```typescript
+    manager.addView(view);
+    // Manager is now in EditorView phase
+    ```
+  </Tab>
+  
+  <Tab title="Runtime Phase">
+    **ManagerPhase.Runtime**
+    
+    - First state update has occurred
+    - Editor is fully operational
+    - `onStateUpdate` handlers are active
+  </Tab>
+  
+  <Tab title="Destroy Phase">
+    **ManagerPhase.Destroy**
+    
+    - Manager is destroyed
+    - All resources cleaned up
+    - `onDestroy` handlers are called
+    
+    ```typescript
+    manager.destroy();
+    // Manager is now in Destroy phase
+    ```
+  </Tab>
+</Tabs>
+
+## Type Utilities
+
+### isRemirrorManager()
+
+Type guard to check if a value is a RemirrorManager.
+
+```typescript
+function isRemirrorManager<Extension extends AnyExtension = AnyExtension>(
+  value: unknown,
+  mustIncludeList?: Array<AnyExtensionConstructor | string>
+): value is RemirrorManager<Extension>
+```
+
+<CodeGroup>
+```typescript Type Guard
+import { isRemirrorManager } from 'remirror';
+
+if (isRemirrorManager(value)) {
+  // TypeScript knows value is a RemirrorManager
+  value.store.commands.insertText('Hello');
+}
+```
+
+```typescript With Extension Check
+import { BoldExtension } from 'remirror/extensions';
+
+if (isRemirrorManager(value, [BoldExtension])) {
+  // Manager definitely has BoldExtension
+  value.getExtension(BoldExtension);
+}
+```
+</CodeGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Extension Base Class" icon="puzzle-piece" href="/api/core/extension">
+    Learn how to create custom extensions
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/api/core/commands">
+    Explore the command system
+  </Card>
+  
+  <Card title="Helpers" icon="wand-magic-sparkles" href="/api/core/helpers">
+    Discover helper utilities
+  </Card>
+  
+  <Card title="Creating Editors" icon="rocket" href="/guides/getting-started">
+    Get started with Remirror
+  </Card>
+</CardGroup>

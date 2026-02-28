@@ -1,0 +1,204 @@
+---
+title: Introduction to Remirror
+description: A React toolkit for building cross-platform rich text editors based on ProseMirror
+---
+
+<img
+  className="block dark:hidden"
+  src="https://raw.githubusercontent.com/remirror/remirror/next/support/assets/logo-animated-light.svg?sanitize=true"
+  alt="Remirror Logo"
+  width="300"
+  height="300"
+/>
+<img
+  className="hidden dark:block"
+  src="https://raw.githubusercontent.com/remirror/remirror/next/support/assets/logo-animated-light.svg?sanitize=true"
+  alt="Remirror Logo"
+  width="300"
+  height="300"
+/>
+
+# Welcome to Remirror
+
+Remirror is a **React toolkit** for building **cross-platform** text editors, based on [ProseMirror](https://prosemirror.net). It provides a powerful, extensible foundation for creating rich text editing experiences in your React applications.
+
+## What is Remirror?
+
+Remirror is designed to make building sophisticated text editors straightforward and enjoyable. Instead of wrestling with ProseMirror's low-level APIs, you work with React components and hooks that feel natural and familiar.
+
+```tsx
+import React from 'react';
+import { BoldExtension, ItalicExtension, UnderlineExtension } from 'remirror/extensions';
+import { Remirror, useRemirror, OnChangeJSON } from '@remirror/react';
+
+const extensions = () => [new BoldExtension(), new ItalicExtension(), new UnderlineExtension()];
+
+const Editor = ({ onChange }) => {
+  const { manager, state } = useRemirror({
+    extensions,
+    content: '<p>Hi <strong>Friend</strong></p>',
+    stringHandler: 'html',
+    selection: 'end',
+  });
+
+  return (
+    <Remirror manager={manager} initialContent={state}>
+      <OnChangeJSON onChange={onChange} />
+    </Remirror>
+  );
+};
+```
+
+With just a few lines of code, your editor supports bold, italic, and underline formatting with proper keyboard shortcuts, markdown input rules, and HTML paste handling.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Extensible Architecture" icon="puzzle-piece">
+    30+ built-in extensions for rich text features. Create custom extensions for your specific needs.
+  </Card>
+  
+  <Card title="TypeScript First" icon="code">
+    Built with TypeScript for excellent developer experience with full type safety and IntelliSense.
+  </Card>
+  
+  <Card title="Accessible & I18n" icon="universal-access">
+    A11y focused, ARIA compatible, with internationalization support via Lingui.
+  </Card>
+  
+  <Card title="Mobile Ready" icon="mobile">
+    Great support for mobile devices with touch interactions and virtual keyboards.
+  </Card>
+  
+  <Card title="Collaborative Editing" icon="users">
+    Built-in support for real-time collaboration using Yjs or prosemirror-collab.
+  </Card>
+  
+  <Card title="Framework Integration" icon="react">
+    Native React integration with hooks, components, and context providers.
+  </Card>
+</CardGroup>
+
+## Why Remirror?
+
+ProseMirror is an incredibly powerful editing framework, but it has a steep learning curve. Remirror bridges this gap by:
+
+- **Encapsulating complexity**: Extensions bundle together schemas, commands, keymaps, input rules, and paste rules
+- **Providing React bindings**: Hooks and components that integrate seamlessly with your React apps
+- **Offering ready-to-use editors**: WYSIWYG, Markdown, and Social editors you can use immediately
+- **Enabling customization**: Start with pre-built editors or compose your own from individual extensions
+
+## Two Ways to Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Use our WYSIWYG editor and start editing in 5 minutes
+  </Card>
+  
+  <Card title="Custom Editor" icon="tools" href="/installation">
+    Build your own editor from scratch by composing extensions
+  </Card>
+</CardGroup>
+
+## Core Concepts
+
+### Extensions
+
+Everything in Remirror is an extension. Extensions manage how content is displayed, what commands are available, and how the editor responds to user input.
+
+```tsx
+import { BoldExtension, ItalicExtension, HeadingExtension } from 'remirror/extensions';
+
+const extensions = () => [
+  new BoldExtension(),
+  new ItalicExtension(),
+  new HeadingExtension(),
+];
+```
+
+There are three types of extensions:
+
+- **NodeExtension**: For block-level content (paragraphs, headings, lists)
+- **MarkExtension**: For inline formatting (bold, italic, links)
+- **PlainExtension**: For behavior that doesn't render in the DOM (history, collaboration)
+
+### Manager & State
+
+The **RemirrorManager** controls what your editor can do. It combines your chosen extensions and manages the editor's lifecycle.
+
+The **EditorState** represents the current content and selection. Remirror handles state management for you, whether you need a controlled or uncontrolled editor.
+
+```tsx
+const { manager, state } = useRemirror({
+  extensions,
+  content: '<p>Initial content</p>',
+  stringHandler: 'html',
+});
+```
+
+### Commands & Helpers
+
+Extensions provide commands that modify the editor content and helpers that query the current state:
+
+```tsx
+import { useCommands, useActive } from '@remirror/react';
+
+function BoldButton() {
+  const commands = useCommands();
+  const active = useActive();
+  
+  return (
+    <button
+      onClick={() => commands.toggleBold()}
+      disabled={!commands.toggleBold.enabled()}
+      style={{ fontWeight: active.bold() ? 'bold' : 'normal' }}
+    >
+      Bold
+    </button>
+  );
+}
+```
+
+## What You Can Build
+
+Remirror powers a wide range of editing experiences:
+
+- WYSIWYG content editors for blogs and documentation
+- Rich text inputs for messaging and social platforms
+- Collaborative document editors for team workspaces
+- Code editors with syntax highlighting
+- Markdown editors with live preview
+- Note-taking applications
+- Comment and feedback systems
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Quick Start Tutorial" icon="play" href="/quickstart">
+    Build your first editor in 5 minutes
+  </Card>
+  
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Set up Remirror in your project
+  </Card>
+  
+  <Card title="Browse Extensions" icon="grid" href="/extensions">
+    Explore 30+ ready-to-use extensions
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="https://github.com/remirror/remirror">
+    Star the repo, report issues, and contribute
+  </Card>
+  
+  <Card title="Discord" icon="discord" href="https://remirror.io/chat">
+    Join our community for help and discussions
+  </Card>
+</CardGroup>
+
+<Note>
+  Remirror is open source and MIT licensed. It's maintained by a dedicated team and supported by sponsors including NEXT and Reflect.
+</Note>

@@ -1,0 +1,521 @@
+---
+title: Real-time Collaboration
+description: Add real-time collaborative editing to your Remirror editor using the Collaboration extension
+---
+
+# Real-time Collaboration
+
+Remirror supports real-time collaborative editing through the `CollaborationExtension`, which uses ProseMirror's built-in collaboration features.
+
+## Overview
+
+The Collaboration extension enables multiple users to edit the same document simultaneously. It handles:
+
+- **Operational Transformation**: Synchronizes changes between clients
+- **Conflict Resolution**: Automatically resolves editing conflicts
+- **Version Tracking**: Maintains document version for consistency
+- **Client Identification**: Tracks which user made which changes
+
+<Note>
+  Remirror provides the client-side collaboration logic. You need to implement a server to relay changes between clients.
+</Note>
+
+## Installation
+
+The collaboration extension is included in the main `remirror` package:
+
+```bash
+npm add remirror @remirror/react
+```
+
+## Basic Setup
+
+<Steps>
+  <Step title="Add the CollaborationExtension">
+    Create your editor with the `CollaborationExtension`:
+
+    ```tsx
+    import { useRemirror } from '@remirror/react';
+    import { CollaborationExtension } from 'remirror/extensions';
+    import { useState } from 'react';
+
+    export const CollaborativeEditor = () => {
+      const [clientID] = useState(() => Math.random().toString(36).slice(2));
+
+      const { manager, state } = useRemirror({
+        extensions: () => [
+          new CollaborationExtension({
+            version: 0, // Initial document version
+            clientID, // Unique ID for this client
+            debounceMs: 250, // Debounce time for sending updates
+            onSendableReceived: ({ jsonSendable }) => {
+              // Send changes to your server
+              console.log('Sending to server:', jsonSendable);
+            },
+          }),
+        ],
+        content: '<p>Start collaborating!</p>',
+        stringHandler: 'html',
+      });
+
+      return (
+        <div className='remirror-theme'>
+          <Remirror manager={manager} initialContent={state} />
+        </div>
+      );
+    };
+    ```
+  </Step>
+
+  <Step title="Understanding the Options">
+    The `CollaborationExtension` accepts these options:
+
+    | Option | Type | Description |
+    |--------|------|-------------|
+    | `version` | `number` | The initial document version (default: 0) |
+    | `clientID` | `string \| number` | Unique identifier for this client |
+    | `debounceMs` | `number` | Delay before sending changes (default: 250ms) |
+    | `onSendableReceived` | `function` | Callback when changes are ready to send |
+
+    <Tip>
+      Use a UUID or random string for `clientID` to ensure uniqueness across all clients.
+    </Tip>
+  </Step>
+
+  <Step title="Handle Outgoing Changes">
+    The `onSendableReceived` callback provides changes to send to your server:
+
+    ```tsx
+    const { manager } = useRemirror({
+      extensions: () => [
+        new CollaborationExtension({
+          clientID: myClientID,
+          onSendableReceived: ({ jsonSendable }) => {
+            // jsonSendable contains:
+            // - version: document version
+            // - steps: array of changes
+            // - clientID: who made the changes
+            
+            sendToServer({
+              type: 'update',
+              ...jsonSendable,
+            });
+          },
+        }),
+      ],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Receiving Remote Changes
+
+When you receive changes from other clients, apply them using the `sendCollaborationUpdate` command:
+
+```tsx
+import { useEffect } from 'react';
+import { useCommands } from '@remirror/react';
+
+const CollaborationSync = () => {
+  const { sendCollaborationUpdate } = useCommands();
+
+  useEffect(() => {
+    // Listen for updates from your server
+    const unsubscribe = subscribeToServerUpdates((update) => {
+      sendCollaborationUpdate({
+        version: update.version,
+        steps: update.steps,
+      });
+    });
+
+    return unsubscribe;
+  }, [sendCollaborationUpdate]);
+
+  return null;
+};
+
+// Use it in your editor:
+const MyEditor = () => {
+  const { manager, state } = useRemirror({ /* ... */ });
+
+  return (
+    <Remirror manager={manager} initialContent={state}>
+      <EditorComponent />
+      <CollaborationSync />
+    </Remirror>
+  );
+};
+```
+
+## Complete Example with WebSocket
+
+Here's a full example using WebSockets for real-time communication:
+
+```tsx
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CollaborationExtension } from 'remirror/extensions';
+import { EditorComponent, Remirror, useCommands, useRemirror } from '@remirror/react';
+
+const WS_URL = 'ws://localhost:3000';
+
+const CollaborationSync = () => {
+  const { sendCollaborationUpdate } = useCommands();
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'update') {
+        sendCollaborationUpdate({
+          version: data.version,
+          steps: data.steps,
+        });
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [sendCollaborationUpdate]);
+
+  return null;
+};
+
+export const CollaborativeEditor = () => {
+  const wsRef = useRef<WebSocket | null>(null);
+  const [clientID] = useState(() => 
+    `client-${Math.random().toString(36).slice(2)}`
+  );
+
+  const sendToServer = useCallback((data: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(data));
+    }
+  }, []);
+
+  const { manager, state } = useRemirror({
+    extensions: () => [
+      new CollaborationExtension({
+        version: 0,
+        clientID,
+        debounceMs: 250,
+        onSendableReceived: ({ jsonSendable }) => {
+          sendToServer({
+            type: 'update',
+            ...jsonSendable,
+          });
+        },
+      }),
+    ],
+    content: '<p>Start collaborating!</p>',
+    stringHandler: 'html',
+  });
+
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Connected to collaboration server');
+      // Request initial document state
+      ws.send(JSON.stringify({ type: 'join', clientID }));
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [clientID]);
+
+  return (
+    <div className='remirror-theme'>
+      <Remirror manager={manager} initialContent={state}>
+        <EditorComponent />
+        <CollaborationSync />
+      </Remirror>
+    </div>
+  );
+};
+```
+
+## Server Implementation
+
+Here's a basic Node.js server using `ws` for WebSocket support:
+
+```javascript
+const WebSocket = require('ws');
+
+const wss = new WebSocket.Server({ port: 3000 });
+
+let documentVersion = 0;
+let documentSteps = [];
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+  clients.add(ws);
+  console.log('Client connected. Total clients:', clients.size);
+
+  ws.on('message', (message) => {
+    const data = JSON.parse(message);
+
+    if (data.type === 'join') {
+      // Send current document state to new client
+      ws.send(JSON.stringify({
+        type: 'init',
+        version: documentVersion,
+        steps: documentSteps,
+      }));
+    }
+
+    if (data.type === 'update') {
+      // Verify version
+      if (data.version !== documentVersion) {
+        console.error('Version mismatch');
+        return;
+      }
+
+      // Update document version
+      documentVersion += data.steps.length;
+      documentSteps.push(...data.steps);
+
+      // Broadcast to all other clients
+      const update = JSON.stringify({
+        type: 'update',
+        version: data.version,
+        steps: data.steps,
+        clientID: data.clientID,
+      });
+
+      clients.forEach((client) => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(update);
+        }
+      });
+    }
+  });
+
+  ws.on('close', () => {
+    clients.delete(ws);
+    console.log('Client disconnected. Total clients:', clients.size);
+  });
+});
+
+console.log('Collaboration server running on ws://localhost:3000');
+```
+
+<Warning>
+  This is a basic example for demonstration. Production servers need:
+  - Authentication and authorization
+  - Persistent storage
+  - Error handling and recovery
+  - Rate limiting
+  - Document cleanup
+</Warning>
+
+## Advanced Features
+
+### Manual Flush
+
+Force immediate sending of changes:
+
+```tsx
+const SaveButton = () => {
+  const { flushSendableSteps } = useCommands();
+
+  return (
+    <button onClick={() => flushSendableSteps()}>
+      Save Now
+    </button>
+  );
+};
+```
+
+### Cancel Pending Updates
+
+Cancel queued updates before they're sent:
+
+```tsx
+const { cancelSendableSteps } = useCommands();
+
+// Cancel pending updates
+cancelSendableSteps();
+```
+
+### Showing Active Users
+
+Track and display active collaborators:
+
+```tsx
+import { useState, useEffect } from 'react';
+
+interface User {
+  id: string;
+  name: string;
+  color: string;
+}
+
+const ActiveUsers = () => {
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToPresence((activeUsers) => {
+      setUsers(activeUsers);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {users.map((user) => (
+        <div
+          key={user.id}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: user.color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 'bold',
+          }}
+          title={user.name}
+        >
+          {user.name[0].toUpperCase()}
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+## Handling Edge Cases
+
+### Connection Loss
+
+Handle disconnections gracefully:
+
+```tsx
+const [isConnected, setIsConnected] = useState(true);
+
+useEffect(() => {
+  const ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => setIsConnected(true);
+  ws.onclose = () => setIsConnected(false);
+  ws.onerror = () => setIsConnected(false);
+
+  // Attempt reconnection
+  const reconnectInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.CLOSED) {
+      console.log('Attempting to reconnect...');
+      // Create new connection
+    }
+  }, 5000);
+
+  return () => {
+    clearInterval(reconnectInterval);
+    ws.close();
+  };
+}, []);
+
+return (
+  <div>
+    {!isConnected && (
+      <div style={{ background: '#ff6b6b', color: 'white', padding: 8 }}>
+        Connection lost. Attempting to reconnect...
+      </div>
+    )}
+    <Remirror manager={manager} initialContent={state} />
+  </div>
+);
+```
+
+### Version Conflicts
+
+Handle version mismatches:
+
+```tsx
+onSendableReceived: ({ jsonSendable }) => {
+  sendToServer(jsonSendable).catch((error) => {
+    if (error.message === 'VERSION_MISMATCH') {
+      // Reload document from server
+      requestFullDocumentSync();
+    }
+  });
+}
+```
+
+## Performance Tips
+
+<Tip>
+  Adjust `debounceMs` based on your needs:
+  - **Lower values (100-200ms)**: More real-time but higher server load
+  - **Higher values (500-1000ms)**: Less real-time but lower server load
+</Tip>
+
+<Tip>
+  Send only deltas, not the full document. The Collaboration extension already handles this through steps.
+</Tip>
+
+<Tip>
+  Implement server-side compression for large documents or many simultaneous edits.
+</Tip>
+
+## Alternative: Yjs Integration
+
+For more advanced collaboration features (like offline support), consider using Yjs with Remirror. While not covered in detail here, Yjs provides:
+
+- CRDT-based synchronization
+- Offline editing support
+- Built-in awareness (cursor positions, selections)
+- Multiple transport options (WebSocket, WebRTC, etc.)
+
+<Note>
+  Check the Remirror documentation for Yjs integration guides if you need these advanced features.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Changes not syncing">
+    - Verify WebSocket connection is open
+    - Check that `onSendableReceived` is being called
+    - Ensure server is broadcasting to all clients
+    - Verify document versions match across clients
+  </Accordion>
+
+  <Accordion title="Cursor jumping or content duplication">
+    - Usually caused by version conflicts
+    - Ensure server correctly increments versions
+    - Check that steps are applied in order
+    - Verify each client has a unique `clientID`
+  </Accordion>
+
+  <Accordion title="High latency">
+    - Reduce `debounceMs` for more frequent updates
+    - Optimize server performance
+    - Consider using WebRTC for peer-to-peer connections
+    - Implement compression for large documents
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building Custom Editor" icon="code" href="/guides/building-custom-editor">
+    Learn the fundamentals of building editors
+  </Card>
+  <Card title="Controlled Editor" icon="sliders" href="/guides/controlled-editor">
+    Take full control of editor state
+  </Card>
+</CardGroup>

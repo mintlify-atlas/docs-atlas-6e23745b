@@ -1,0 +1,305 @@
+---
+title: Installation
+description: Install Remirror and set up your development environment for building custom editors
+---
+
+# Installation
+
+This guide walks you through installing Remirror and setting up your development environment. If you want to use an out-of-the-box editor instead, check out our [Quick Start tutorial](/quickstart).
+
+## Package Installation
+
+Install the core Remirror packages based on your package manager:
+
+<CodeGroup>
+```bash npm
+npm add remirror @remirror/react @remirror/pm
+```
+
+```bash yarn
+yarn add remirror @remirror/react @remirror/pm
+```
+
+```bash pnpm
+pnpm add remirror @remirror/react @remirror/pm
+```
+</CodeGroup>
+
+## Understanding the Packages
+
+<CardGroup cols={3}>
+  <Card title="remirror" icon="box">
+    The main package containing all extensions and core functionality actively developed in the Remirror repository.
+  </Card>
+  
+  <Card title="@remirror/react" icon="react">
+    React-specific hooks, components, and utilities for integrating Remirror with your React application.
+  </Card>
+  
+  <Card title="@remirror/pm" icon="puzzle-piece">
+    A peer dependency that provides access to all core ProseMirror libraries with consistent versions.
+  </Card>
+</CardGroup>
+
+<Note>
+  The `@remirror/pm` package ensures all Remirror packages use the exact same versions of ProseMirror libraries (`prosemirror-state`, `prosemirror-view`, etc.). This prevents version conflicts and simplifies your dependency tree.
+</Note>
+
+## Peer Dependencies
+
+### React
+
+Remirror requires React 16.14.0 or higher:
+
+```json package.json
+{
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }
+}
+```
+
+If you're using TypeScript (recommended), also install the type definitions:
+
+```bash
+npm add --save-dev @types/react @types/react-dom
+```
+
+### Emotion (for pre-built editors)
+
+If you're using pre-built editors like `WysiwygEditor`, you'll need Emotion for styling:
+
+<CodeGroup>
+```bash npm
+npm add @emotion/react @emotion/styled @remirror/react-editors
+```
+
+```bash yarn
+yarn add @emotion/react @emotion/styled @remirror/react-editors
+```
+
+```bash pnpm
+pnpm add @emotion/react @emotion/styled @remirror/react-editors
+```
+</CodeGroup>
+
+<Tip>
+  If you're building a custom editor from scratch, you don't need Emotion. You can style your editor using your preferred CSS solution.
+</Tip>
+
+## TypeScript Setup
+
+Remirror is built with TypeScript and provides excellent type safety out of the box. We strongly recommend using TypeScript for the best developer experience.
+
+### TypeScript Configuration
+
+Ensure your `tsconfig.json` includes these settings:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "ESNext",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true
+  }
+}
+```
+
+### Type Imports
+
+Remirror exports comprehensive TypeScript types:
+
+```tsx
+import type { RemirrorJSON } from 'remirror';
+import type { RemirrorProps } from '@remirror/react';
+import type { EditorState, Transaction } from '@remirror/pm/state';
+import type { EditorView } from '@remirror/pm/view';
+```
+
+<Warning>
+  When working with ProseMirror types, always import from `@remirror/pm/*` instead of the individual `prosemirror-*` packages. This ensures version consistency across your application.
+</Warning>
+
+## Importing ProseMirror Modules
+
+If you need direct access to ProseMirror functionality, import from the `@remirror/pm` scoped packages:
+
+```tsx
+// ✅ Correct - Import from @remirror/pm
+import { EditorState } from '@remirror/pm/state';
+import { EditorView } from '@remirror/pm/view';
+import { Schema } from '@remirror/pm/model';
+import { keymap } from '@remirror/pm/keymap';
+
+// ❌ Incorrect - Don't import directly from prosemirror packages
+import { EditorState } from 'prosemirror-state'; // Don't do this!
+```
+
+Available `@remirror/pm` imports:
+
+- `@remirror/pm/state` - Editor state management
+- `@remirror/pm/view` - Editor view and rendering
+- `@remirror/pm/model` - Document model and schema
+- `@remirror/pm/transform` - Document transformations
+- `@remirror/pm/commands` - Built-in commands
+- `@remirror/pm/keymap` - Keyboard shortcut handling
+- `@remirror/pm/history` - Undo/redo functionality
+- `@remirror/pm/inputrules` - Input rule handling
+- `@remirror/pm/gapcursor` - Gap cursor support
+- `@remirror/pm/tables` - Table support
+
+## Browser Support
+
+Remirror supports modern browsers from 2017 onwards:
+
+- Chrome 60+
+- Firefox 60+
+- Safari 11+
+- Edge 79+
+
+<Note>
+  Internet Explorer is not supported. If you need to support older browsers, you'll need to configure appropriate polyfills in your build system.
+</Note>
+
+## Development Tools
+
+### Editor DevTools
+
+For debugging, you can enable ProseMirror DevTools:
+
+```tsx
+import { useRemirror, Remirror } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+function App() {
+  const { manager, state } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  return (
+    <Remirror
+      manager={manager}
+      initialContent={state}
+      // Enable dev tools in development
+      editorProps={{
+        attributes: {
+          'data-testid': 'remirror-editor',
+        },
+      }}
+    />
+  );
+}
+```
+
+## Verification
+
+Verify your installation by creating a simple editor:
+
+```tsx src/App.tsx
+import { useRemirror, Remirror } from '@remirror/react';
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+
+function App() {
+  const { manager, state } = useRemirror({
+    extensions: () => [new BoldExtension(), new ItalicExtension()],
+    content: '<p>Hello <strong>Remirror</strong>!</p>',
+    stringHandler: 'html',
+  });
+
+  return (
+    <div style={{ padding: 20 }}>
+      <Remirror manager={manager} initialContent={state} />
+    </div>
+  );
+}
+
+export default App;
+```
+
+If this renders without errors, you're all set!
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Version mismatch errors">
+    If you see errors about incompatible ProseMirror versions, ensure you're importing from `@remirror/pm/*` instead of individual `prosemirror-*` packages.
+
+    ```bash
+    # Remove any direct prosemirror dependencies
+    npm uninstall prosemirror-state prosemirror-view prosemirror-model
+    ```
+  </Accordion>
+
+  <Accordion title="Module not found errors">
+    Make sure you've installed all required peer dependencies:
+
+    ```bash
+    npm add remirror @remirror/react @remirror/pm react react-dom
+    ```
+  </Accordion>
+
+  <Accordion title="TypeScript errors">
+    If you see TypeScript errors, ensure:
+    - You're using TypeScript 4.5 or higher
+    - Your `tsconfig.json` includes the settings mentioned above
+    - You've installed `@types/react` and `@types/react-dom`
+  </Accordion>
+
+  <Accordion title="Styling issues">
+    Remirror requires some base CSS. If content appears unstyled:
+
+    ```tsx
+    // Import base styles
+    import 'remirror/styles/all.css';
+    ```
+
+    For pre-built editors, ensure you've installed Emotion packages.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have Remirror installed, you're ready to build your editor:
+
+<CardGroup cols={2}>
+  <Card title="Create Your First Editor" icon="rocket" href="/getting-started/create-manager">
+    Learn how to create a manager and add extensions
+  </Card>
+  
+  <Card title="Render the Editor" icon="browser" href="/getting-started/render-editor">
+    Display your editor in your React application
+  </Card>
+  
+  <Card title="Browse Extensions" icon="puzzle-piece" href="/extensions">
+    Explore 30+ available extensions
+  </Card>
+  
+  <Card title="Learn Core Concepts" icon="book" href="/concepts/extension">
+    Understand extensions, managers, and state
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you run into any issues:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/remirror/remirror/issues">
+    Report bugs or request features
+  </Card>
+  
+  <Card title="Discord Community" icon="discord" href="https://remirror.io/chat">
+    Get help from the community
+  </Card>
+</CardGroup>
+
+<Tip>
+  For the best support experience, include your package versions, error messages, and a minimal reproduction when asking for help.
+</Tip>

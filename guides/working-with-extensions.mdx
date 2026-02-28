@@ -1,0 +1,425 @@
+---
+title: Working with Extensions
+description: Learn how to configure built-in extensions and create custom extensions to extend your editor's functionality
+---
+
+# Working with Extensions
+
+Extensions are the building blocks of Remirror. They provide functionality like formatting, nodes, and commands to your editor.
+
+## Extension Types
+
+Remirror has three types of extensions:
+
+<CardGroup cols={3}>
+  <Card title="PlainExtension" icon="gear">
+    Adds functionality without document representation (e.g., SchemaExtension, FindExtension)
+  </Card>
+  <Card title="NodeExtension" icon="square">
+    Represents ProseMirror nodes like paragraphs, images, or headings
+  </Card>
+  <Card title="MarkExtension" icon="highlighter">
+    Adds formatting marks like bold, italic, or links
+  </Card>
+</CardGroup>
+
+## Using Built-in Extensions
+
+### Basic Setup
+
+Add extensions by instantiating them in the extensions array:
+
+```tsx
+import { useRemirror } from '@remirror/react';
+import { BoldExtension, ItalicExtension, UnderlineExtension } from 'remirror/extensions';
+
+export const MyEditor = () => {
+  const { manager, state } = useRemirror({
+    extensions: () => [
+      new BoldExtension(),
+      new ItalicExtension(),
+      new UnderlineExtension(),
+    ],
+  });
+
+  return (
+    <div className='remirror-theme'>
+      <Remirror manager={manager} initialContent={state} />
+    </div>
+  );
+};
+```
+
+### Configuring Extensions
+
+Extensions accept options to customize their behavior:
+
+```tsx
+import { BoldExtension, CodeBlockExtension, HeadingExtension } from 'remirror/extensions';
+
+const { manager } = useRemirror({
+  extensions: () => [
+    new BoldExtension({ 
+      weight: 600 // Custom font weight
+    }),
+    new HeadingExtension({ 
+      levels: [1, 2, 3], // Only h1, h2, h3
+      defaultLevel: 2 
+    }),
+    new CodeBlockExtension({
+      defaultLanguage: 'typescript',
+      syntaxTheme: 'base16_ateliersulphurpool_light',
+      supportedLanguages: ['typescript', 'javascript', 'python', 'rust'],
+    }),
+  ],
+});
+```
+
+<Note>
+  Options marked as `Static` cannot be changed after the extension is created. They must be set during initialization.
+</Note>
+
+## Using Presets
+
+Presets are collections of pre-configured extensions:
+
+```tsx
+import { wysiwygPreset } from 'remirror/extensions';
+import { useRemirror } from '@remirror/react';
+
+const { manager } = useRemirror({
+  extensions: () => [
+    ...wysiwygPreset(),
+  ],
+});
+```
+
+### Customizing Preset Options
+
+Pass options to configure all extensions in the preset:
+
+```tsx
+const { manager } = useRemirror({
+  extensions: () => [
+    ...wysiwygPreset({
+      // Heading options
+      defaultLevel: 1,
+      levels: [1, 2, 3],
+      
+      // Bold options
+      weight: 600,
+      
+      // Link options
+      selectTextOnClick: true,
+      
+      // Code block options
+      defaultLanguage: 'typescript',
+      syntaxTheme: 'nord',
+    }),
+  ],
+});
+```
+
+### Adding Extensions to Presets
+
+Combine presets with additional extensions:
+
+```tsx
+import { wysiwygPreset } from 'remirror/extensions';
+import { PlaceholderExtension, TableExtension } from 'remirror/extensions';
+
+const { manager } = useRemirror({
+  extensions: () => [
+    new PlaceholderExtension({ placeholder: 'Enter text...' }),
+    new TableExtension(),
+    ...wysiwygPreset(),
+  ],
+});
+```
+
+## Creating Custom Extensions
+
+### Creating a Mark Extension
+
+Let's create a custom `<samp>` mark extension for sample output text:
+
+```tsx
+import {
+  ApplySchemaAttributes,
+  command,
+  CommandFunction,
+  extension,
+  ExtensionTag,
+  getTextSelection,
+  MarkExtension,
+  MarkExtensionSpec,
+  MarkSpecOverride,
+  PrimitiveSelection,
+  toggleMark,
+} from 'remirror';
+import type { TagParseRule } from '@remirror/pm/model';
+
+export interface SampOptions {}
+
+@extension<SampOptions>({ defaultOptions: {} })
+export class SampExtension extends MarkExtension<SampOptions> {
+  get name() {
+    return 'samp' as const;
+  }
+
+  createTags() {
+    return [ExtensionTag.FormattingMark, ExtensionTag.FontStyle];
+  }
+
+  createMarkSpec(extra: ApplySchemaAttributes, override: MarkSpecOverride): MarkExtensionSpec {
+    return {
+      ...override,
+      attrs: extra.defaults(),
+      parseDOM: [
+        {
+          tag: 'samp',
+          getAttrs: extra.parse,
+        } satisfies TagParseRule,
+        ...(override.parseDOM ?? []),
+      ],
+      toDOM: (node) => {
+        return ['samp', extra.dom(node), 0];
+      },
+    };
+  }
+}
+```
+
+<Steps>
+  <Step title="Extend MarkExtension">
+    Your extension class extends `MarkExtension` with a typed options interface.
+  </Step>
+  
+  <Step title="Define the Name">
+    The `name` getter returns a unique identifier for your extension.
+  </Step>
+  
+  <Step title="Add Tags">
+    `createTags()` categorizes your extension (FormattingMark, FontStyle, etc.).
+  </Step>
+  
+  <Step title="Define the Schema">
+    `createMarkSpec()` defines how your mark is parsed from HTML and rendered to DOM.
+  </Step>
+</Steps>
+
+### Adding Commands
+
+Add commands to allow users to interact with your extension:
+
+```tsx
+export class SampExtension extends MarkExtension<SampOptions> {
+  // ... previous code ...
+
+  @command()
+  toggleSamp(selection?: PrimitiveSelection): CommandFunction {
+    return toggleMark({ type: this.type, selection });
+  }
+
+  @command()
+  setSamp(selection?: PrimitiveSelection): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const { from, to } = getTextSelection(selection ?? tr.selection, tr.doc);
+      dispatch?.(tr.addMark(from, to, this.type.create()));
+      return true;
+    };
+  }
+
+  @command()
+  removeSamp(selection?: PrimitiveSelection): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const { from, to } = getTextSelection(selection ?? tr.selection, tr.doc);
+
+      if (!tr.doc.rangeHasMark(from, to, this.type)) {
+        return false;
+      }
+
+      dispatch?.(tr.removeMark(from, to, this.type));
+      return true;
+    };
+  }
+}
+```
+
+<Note>
+  Commands must return `true` if they're enabled, `false` otherwise. When `dispatch` is provided, they modify the document. Without `dispatch`, they just check availability.
+</Note>
+
+### Adding Keyboard Shortcuts
+
+Bind keyboard shortcuts to your commands:
+
+```tsx
+import { keyBinding, KeyBindingProps, NamedShortcut } from 'remirror';
+
+export class SampExtension extends MarkExtension<SampOptions> {
+  // ... previous code ...
+
+  @keyBinding({ shortcut: 'Mod-Shift-S', command: 'toggleSamp' })
+  shortcut(props: KeyBindingProps): boolean {
+    return this.toggleSamp()(props);
+  }
+}
+```
+
+### Adding Input Rules
+
+Input rules trigger transformations as users type:
+
+```tsx
+import { InputRule, markInputRule } from 'remirror';
+
+export class SampExtension extends MarkExtension<SampOptions> {
+  // ... previous code ...
+
+  createInputRules(): InputRule[] {
+    return [
+      markInputRule({
+        regexp: /`([^`]+)`$/,
+        type: this.type,
+        ignoreWhitespace: true,
+      }),
+    ];
+  }
+}
+```
+
+Now typing `` `text` `` will automatically format it as sample output.
+
+### Using Your Custom Extension
+
+Use your custom extension like any built-in extension:
+
+```tsx
+import { EditorComponent, Remirror, useCommands, useRemirror } from '@remirror/react';
+import { SampExtension } from './samp-extension';
+
+const Menu = () => {
+  const { toggleSamp, focus } = useCommands();
+
+  return (
+    <button
+      onClick={() => {
+        toggleSamp();
+        focus();
+      }}
+    >
+      Samp
+    </button>
+  );
+};
+
+export const MyEditor = () => {
+  const { manager, state } = useRemirror({
+    extensions: () => [new SampExtension()],
+  });
+
+  return (
+    <div className='remirror-theme'>
+      <Remirror manager={manager} initialContent={state}>
+        <EditorComponent />
+        <Menu />
+      </Remirror>
+    </div>
+  );
+};
+```
+
+## Example: Bold Extension Source
+
+Here's how the built-in `BoldExtension` is implemented:
+
+```tsx
+@extension<BoldOptions>({
+  defaultOptions: { weight: undefined },
+  staticKeys: ['weight'],
+})
+export class BoldExtension extends MarkExtension<BoldOptions> {
+  get name() {
+    return 'bold' as const;
+  }
+
+  createTags() {
+    return [ExtensionTag.FormattingMark, ExtensionTag.FontStyle];
+  }
+
+  createMarkSpec(extra: ApplySchemaAttributes, override: MarkSpecOverride): MarkExtensionSpec {
+    return {
+      ...override,
+      attrs: extra.defaults(),
+      parseDOM: [
+        { tag: 'strong', getAttrs: extra.parse },
+        {
+          tag: 'b',
+          getAttrs: (node) =>
+            isElementDomNode(node) && node.style.fontWeight !== 'normal'
+              ? extra.parse(node)
+              : false,
+        },
+        {
+          style: 'font-weight',
+          getAttrs: (node) =>
+            isString(node) && /^(bold(er)?|[5-9]\d{2,})$/.test(node) ? null : false,
+        },
+        ...(override.parseDOM ?? []),
+      ],
+      toDOM: (node) => {
+        const { weight } = this.options;
+        if (weight) {
+          return ['strong', { 'font-weight': weight.toString() }, 0];
+        }
+        return ['strong', extra.dom(node), 0];
+      },
+    };
+  }
+
+  createInputRules(): InputRule[] {
+    return [
+      markInputRule({
+        regexp: /(?:\*\*|__)([^*_]+)(?:\*\*|__)$/,
+        type: this.type,
+        ignoreWhitespace: true,
+      }),
+    ];
+  }
+
+  @command()
+  toggleBold(selection?: PrimitiveSelection): CommandFunction {
+    return toggleMark({ type: this.type, selection });
+  }
+
+  @keyBinding({ shortcut: NamedShortcut.Bold, command: 'toggleBold' })
+  shortcut(props: KeyBindingProps): boolean {
+    return this.toggleBold()(props);
+  }
+}
+```
+
+This shows the full lifecycle: schema definition, input rules, commands, and keyboard shortcuts.
+
+<Warning>
+  When creating Node or Mark extensions, you must understand the [ProseMirror schema system](https://prosemirror.net/docs/guide/#schema). Reading the ProseMirror guide is highly recommended.
+</Warning>
+
+## Extension Naming Conventions
+
+When publishing extensions as npm packages:
+
+- `remirror-extension-<name>` - For standalone extensions
+- `remirror-preset-<name>` - For composing multiple extensions together
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Styling" icon="palette" href="/guides/styling">
+    Customize the appearance of your editor
+  </Card>
+  <Card title="Commands & Helpers" icon="terminal" href="/getting-started/commands-and-helpers">
+    Learn more about commands and helpers
+  </Card>
+</CardGroup>

@@ -1,0 +1,724 @@
+---
+title: ProseMirror Plugins
+description: Deep dive into ProseMirror plugin integration, custom plugins, and plugin state management
+---
+
+# ProseMirror Plugins
+
+Plugins are the primary mechanism for extending ProseMirror's behavior. Remirror provides a powerful abstraction layer that makes working with ProseMirror plugins straightforward while maintaining full access to their capabilities.
+
+<Info>
+  Plugins can handle everything from tracking document state to implementing complex editor behaviors like drag-and-drop, collaborative editing, and custom decorations.
+</Info>
+
+## Understanding Plugins
+
+Plugins in ProseMirror are objects that can hook into various parts of the editor's functionality:
+
+```typescript
+import { Plugin, PluginKey } from '@remirror/pm/state';
+import { Decoration, DecorationSet } from '@remirror/pm/view';
+
+// Basic plugin structure
+const myPlugin = new Plugin({
+  // Unique identifier for this plugin
+  key: new PluginKey('myPlugin'),
+  
+  // Plugin state
+  state: {
+    init(config, state) {
+      return { /* initial state */ };
+    },
+    apply(tr, value, oldState, newState) {
+      return { /* updated state */ };
+    },
+  },
+  
+  // Plugin props
+  props: {
+    decorations(state) {
+      return DecorationSet.empty;
+    },
+    handleKeyDown(view, event) {
+      return false;
+    },
+  },
+  
+  // View lifecycle
+  view(editorView) {
+    return {
+      update(view, prevState) {},
+      destroy() {},
+    };
+  },
+});
+```
+
+## Creating Plugins in Extensions
+
+Remirror extensions can create plugins using the `createPlugin` method:
+
+### Basic Plugin Creation
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import { Plugin, PluginKey } from '@remirror/pm/state';
+import type { CreateExtensionPlugin } from '@remirror/core';
+
+@extension({})
+class WordCountExtension extends PlainExtension {
+  get name() {
+    return 'wordCount' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin {
+    const pluginKey = new PluginKey('wordCount');
+    
+    return {
+      state: {
+        init: (_, state) => {
+          return this.countWords(state.doc);
+        },
+        apply: (tr, oldCount, oldState, newState) => {
+          // Only recalculate if document changed
+          if (!tr.docChanged) {
+            return oldCount;
+          }
+          
+          return this.countWords(newState.doc);
+        },
+      },
+      key: pluginKey,
+    };
+  }
+  
+  private countWords(doc: ProsemirrorNode): number {
+    return doc.textContent.split(/\s+/).filter(Boolean).length;
+  }
+}
+```
+
+### Multiple Plugins
+
+Extensions can return multiple plugins as an array:
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import type { CreateExtensionPlugin } from '@remirror/core';
+
+@extension({})
+class AnalyticsExtension extends PlainExtension {
+  get name() {
+    return 'analytics' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin[] {
+    return [
+      // Plugin for tracking changes
+      {
+        key: new PluginKey('analytics-changes'),
+        state: {
+          init: () => ({ changeCount: 0 }),
+          apply: (tr, value) => {
+            if (tr.docChanged) {
+              return { changeCount: value.changeCount + 1 };
+            }
+            return value;
+          },
+        },
+      },
+      // Plugin for tracking selections
+      {
+        key: new PluginKey('analytics-selection'),
+        state: {
+          init: () => ({ selectionCount: 0 }),
+          apply: (tr, value) => {
+            if (tr.selectionSet) {
+              return { selectionCount: value.selectionCount + 1 };
+            }
+            return value;
+          },
+        },
+      },
+    ];
+  }
+}
+```
+
+## Plugin State Management
+
+Plugin state persists across transactions and can be accessed throughout your extension:
+
+### Defining Plugin State
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import { Plugin, PluginKey } from '@remirror/pm/state';
+
+interface UndoState {
+  history: any[];
+  index: number;
+}
+
+@extension({})
+class CustomUndoExtension extends PlainExtension {
+  get name() {
+    return 'customUndo' as const;
+  }
+  
+  private pluginKey = new PluginKey<UndoState>('customUndo');
+  
+  createPlugin(): CreateExtensionPlugin<UndoState> {
+    return {
+      key: this.pluginKey,
+      
+      state: {
+        init: (): UndoState => ({
+          history: [],
+          index: -1,
+        }),
+        
+        apply: (tr, value, oldState, newState): UndoState => {
+          // Skip if marked as undo/redo
+          if (tr.getMeta(this.pluginKey)) {
+            return value;
+          }
+          
+          // Add to history if document changed
+          if (tr.docChanged) {
+            const newHistory = value.history.slice(0, value.index + 1);
+            newHistory.push({
+              doc: oldState.doc,
+              selection: oldState.selection,
+            });
+            
+            return {
+              history: newHistory,
+              index: newHistory.length - 1,
+            };
+          }
+          
+          return value;
+        },
+      },
+    };
+  }
+}
+```
+
+### Accessing Plugin State
+
+<CodeGroup>
+```typescript In Commands
+import { command, CommandFunction } from '@remirror/core';
+
+class CustomUndoExtension extends PlainExtension {
+  @command()
+  undo(): CommandFunction {
+    return ({ state, dispatch }) => {
+      const pluginState = this.pluginKey.getState(state);
+      
+      if (!pluginState || pluginState.index < 0) {
+        return false;
+      }
+      
+      const { doc, selection } = pluginState.history[pluginState.index];
+      
+      if (dispatch) {
+        const tr = state.tr
+          .replaceWith(0, state.doc.content.size, doc.content)
+          .setSelection(selection)
+          .setMeta(this.pluginKey, true)
+          .setMeta('addToHistory', false);
+        
+        dispatch(tr);
+      }
+      
+      return true;
+    };
+  }
+}
+```
+
+```typescript In Helpers
+import { helper, Helper } from '@remirror/core';
+
+class CustomUndoExtension extends PlainExtension {
+  @helper()
+  canUndo(): Helper<boolean> {
+    return ({ state }) => {
+      const pluginState = this.pluginKey.getState(state);
+      return pluginState ? pluginState.index >= 0 : false;
+    };
+  }
+  
+  @helper()
+  getHistorySize(): Helper<number> {
+    return ({ state }) => {
+      const pluginState = this.pluginKey.getState(state);
+      return pluginState ? pluginState.history.length : 0;
+    };
+  }
+}
+```
+
+```typescript In Lifecycle Methods
+class CustomUndoExtension extends PlainExtension {
+  onStateUpdate({ state }: StateUpdateLifecycleProps) {
+    const pluginState = this.pluginKey.getState(state);
+    
+    if (pluginState) {
+      console.log('History size:', pluginState.history.length);
+      console.log('Current index:', pluginState.index);
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+  Plugin state is immutable. Always return new state objects from the `apply` method rather than mutating existing state.
+</Note>
+
+## Plugin Props
+
+Plugin props handle editor events and behaviors:
+
+### Handling DOM Events
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import type { CreateExtensionPlugin } from '@remirror/core';
+
+@extension({})
+class ClickTrackingExtension extends PlainExtension {
+  get name() {
+    return 'clickTracking' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin {
+    return {
+      props: {
+        handleClickOn: (view, pos, node, nodePos, event, direct) => {
+          console.log('Clicked on node:', node.type.name, 'at position:', nodePos);
+          
+          // Return true to prevent default behavior
+          return false;
+        },
+        
+        handleDoubleClick: (view, pos, event) => {
+          console.log('Double-clicked at position:', pos);
+          return false;
+        },
+        
+        handleKeyDown: (view, event) => {
+          if (event.key === 'Enter' && event.ctrlKey) {
+            // Custom Enter handling
+            console.log('Ctrl+Enter pressed');
+            return true; // Prevent default
+          }
+          return false;
+        },
+        
+        handlePaste: (view, event, slice) => {
+          // Custom paste handling
+          console.log('Pasted content:', slice.content);
+          return false;
+        },
+        
+        handleDrop: (view, event, slice, moved) => {
+          // Custom drop handling
+          return false;
+        },
+      },
+    };
+  }
+}
+```
+
+### Decorations
+
+Decorations add visual elements without modifying the document:
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import { Decoration, DecorationSet } from '@remirror/pm/view';
+import type { CreateExtensionPlugin } from '@remirror/core';
+
+@extension({})
+class HighlightSearchExtension extends PlainExtension {
+  get name() {
+    return 'highlightSearch' as const;
+  }
+  
+  private searchTerm = '';
+  
+  createPlugin(): CreateExtensionPlugin {
+    return {
+      state: {
+        init: () => DecorationSet.empty,
+        apply: (tr, oldDecorations) => {
+          // Map decorations through transaction
+          const decorations = oldDecorations.map(tr.mapping, tr.doc);
+          
+          // Rebuild if search term in metadata
+          const newSearch = tr.getMeta('updateSearch');
+          if (newSearch !== undefined) {
+            this.searchTerm = newSearch;
+            return this.buildDecorations(tr.doc);
+          }
+          
+          return decorations;
+        },
+      },
+      
+      props: {
+        decorations: (state) => {
+          return this.getPluginState(state);
+        },
+      },
+    };
+  }
+  
+  private buildDecorations(doc: ProsemirrorNode): DecorationSet {
+    const decorations: Decoration[] = [];
+    
+    if (!this.searchTerm) {
+      return DecorationSet.empty;
+    }
+    
+    const regex = new RegExp(this.searchTerm, 'gi');
+    
+    doc.descendants((node, pos) => {
+      if (!node.isText) {
+        return;
+      }
+      
+      const text = node.text || '';
+      let match;
+      
+      while ((match = regex.exec(text)) !== null) {
+        const from = pos + match.index;
+        const to = from + match[0].length;
+        
+        decorations.push(
+          Decoration.inline(from, to, {
+            class: 'search-highlight',
+            style: 'background-color: yellow',
+          })
+        );
+      }
+    });
+    
+    return DecorationSet.create(doc, decorations);
+  }
+}
+```
+
+<Tip>
+  Use decorations for visual enhancements like syntax highlighting, search results, or temporary UI elements. They don't affect the document structure or content.
+</Tip>
+
+## Plugin View
+
+Plugin views provide lifecycle hooks for DOM manipulation:
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import type { CreateExtensionPlugin } from '@remirror/core';
+import type { EditorView } from '@remirror/pm/view';
+
+@extension({})
+class FloatingMenuExtension extends PlainExtension {
+  get name() {
+    return 'floatingMenu' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin {
+    return {
+      view: (editorView) => {
+        return new FloatingMenuView(editorView);
+      },
+    };
+  }
+}
+
+class FloatingMenuView {
+  private menuElement: HTMLElement;
+  
+  constructor(private view: EditorView) {
+    this.menuElement = document.createElement('div');
+    this.menuElement.className = 'floating-menu';
+    document.body.appendChild(this.menuElement);
+    
+    this.update(view, null);
+  }
+  
+  update(view: EditorView, prevState: EditorState | null) {
+    const { state } = view;
+    const { selection } = state;
+    
+    // Hide menu if selection is empty
+    if (selection.empty) {
+      this.menuElement.style.display = 'none';
+      return;
+    }
+    
+    // Show and position menu
+    this.menuElement.style.display = 'block';
+    
+    // Get coordinates of selection
+    const { from, to } = selection;
+    const start = view.coordsAtPos(from);
+    const end = view.coordsAtPos(to);
+    
+    // Position menu above selection
+    const left = (start.left + end.left) / 2;
+    const top = start.top;
+    
+    this.menuElement.style.left = `${left}px`;
+    this.menuElement.style.top = `${top - 40}px`;
+    this.menuElement.style.transform = 'translateX(-50%)';
+  }
+  
+  destroy() {
+    this.menuElement.remove();
+  }
+}
+```
+
+## Transaction Filters
+
+Intercept and modify transactions using `appendTransaction`:
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import type { CreateExtensionPlugin } from '@remirror/core';
+
+@extension({})
+class AutoLinkExtension extends PlainExtension {
+  get name() {
+    return 'autoLink' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin {
+    return {
+      appendTransaction: (transactions, oldState, newState) => {
+        // Only process document changes
+        const docChanged = transactions.some((tr) => tr.docChanged);
+        if (!docChanged) {
+          return null;
+        }
+        
+        const tr = newState.tr;
+        let modified = false;
+        
+        // Find URLs in new text
+        transactions.forEach((transaction) => {
+          transaction.steps.forEach((step) => {
+            const stepMap = step.getMap();
+            
+            stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
+              if (newStart === newEnd) return;
+              
+              const $start = newState.doc.resolve(newStart);
+              const $end = newState.doc.resolve(newEnd);
+              const textNode = $start.parent.textBetween(
+                $start.parentOffset,
+                $end.parentOffset
+              );
+              
+              // Simple URL regex
+              const urlRegex = /https?:\/\/[^\s]+/g;
+              let match;
+              
+              while ((match = urlRegex.exec(textNode)) !== null) {
+                const start = newStart + match.index;
+                const end = start + match[0].length;
+                const url = match[0];
+                
+                // Add link mark
+                const linkMark = newState.schema.marks.link.create({
+                  href: url,
+                });
+                
+                tr.addMark(start, end, linkMark);
+                modified = true;
+              }
+            });
+          });
+        });
+        
+        return modified ? tr : null;
+      },
+    };
+  }
+}
+```
+
+<Warning>
+  `appendTransaction` should return `null` if no modifications are needed. Returning an empty transaction can cause infinite loops.
+</Warning>
+
+## Plugin Communication
+
+Plugins can communicate through transaction metadata:
+
+```typescript
+import { PlainExtension, extension } from '@remirror/core';
+import { PluginKey } from '@remirror/pm/state';
+
+const collaborationKey = new PluginKey('collaboration');
+
+@extension({})
+class CollaborationExtension extends PlainExtension {
+  get name() {
+    return 'collaboration' as const;
+  }
+  
+  createPlugin(): CreateExtensionPlugin {
+    return {
+      key: collaborationKey,
+      
+      state: {
+        init: () => ({ version: 0 }),
+        apply: (tr, value) => {
+          // Check for remote changes
+          const isRemote = tr.getMeta(collaborationKey)?.remote;
+          
+          if (isRemote) {
+            console.log('Received remote change');
+          }
+          
+          if (tr.docChanged) {
+            return { version: value.version + 1 };
+          }
+          
+          return value;
+        },
+      },
+      
+      view: (view) => ({
+        update: (view, prevState) => {
+          // Send local changes to server
+          const tr = view.state.tr;
+          const isRemote = tr.getMeta(collaborationKey)?.remote;
+          
+          if (!isRemote && tr.docChanged) {
+            this.sendToServer(view.state);
+          }
+        },
+      }),
+    };
+  }
+  
+  /**
+   * Apply remote changes
+   */
+  @command()
+  applyRemoteChange(steps: any[]): CommandFunction {
+    return ({ state, dispatch }) => {
+      const tr = state.tr;
+      
+      // Mark as remote to prevent echo
+      tr.setMeta(collaborationKey, { remote: true });
+      
+      // Apply steps
+      steps.forEach((step) => tr.step(step));
+      
+      dispatch?.(tr);
+      return true;
+    };
+  }
+  
+  private sendToServer(state: EditorState) {
+    // Send changes to collaboration server
+  }
+}
+```
+
+## Built-in Plugin Extensions
+
+Remirror provides several built-in extensions that demonstrate plugin patterns:
+
+### PluginsExtension
+
+Manages all plugins from extensions:
+
+```typescript
+// From: ~/workspace/source/packages/remirror__core/src/builtins/plugins-extension.ts:50
+
+@extension<PluginsOptions>({
+  defaultPriority: ExtensionPriority.Highest,
+  handlerKeys: ['applyState', 'appendTransaction'],
+})
+export class PluginsExtension extends PlainExtension<PluginsOptions> {
+  private plugins: ProsemirrorPlugin[] = [];
+  private pluginKeys: Record<string, PluginKey> = {};
+  
+  onCreate(): void {
+    // Extract plugins from all extensions
+    for (const extension of this.store.extensions) {
+      if (extension.createPlugin) {
+        this.extractExtensionPlugins(extension);
+      }
+    }
+    
+    // Make plugins available to manager
+    this.store.setStoreKey('plugins', this.plugins);
+    this.store.setStoreKey('pluginKeys', this.pluginKeys);
+  }
+}
+```
+
+## Testing Plugins
+
+```typescript
+import { renderEditor } from '@remirror/testing';
+import { MyPluginExtension } from './my-plugin-extension';
+
+describe('MyPluginExtension', () => {
+  it('should maintain plugin state', () => {
+    const extension = new MyPluginExtension();
+    const { view } = renderEditor([extension]);
+    
+    // Get plugin state
+    const pluginKey = extension['pluginKey'];
+    const state = pluginKey.getState(view.state);
+    
+    expect(state).toBeDefined();
+  });
+  
+  it('should handle transactions', () => {
+    const extension = new MyPluginExtension();
+    const { view } = renderEditor([extension]);
+    
+    // Trigger transaction
+    const tr = view.state.tr.insertText('Hello');
+    view.dispatch(tr);
+    
+    // Verify state update
+    const pluginKey = extension['pluginKey'];
+    const state = pluginKey.getState(view.state);
+    
+    expect(state.changeCount).toBe(1);
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="./commands">
+    Master the command system and transactions
+  </Card>
+  <Card title="Node Views" icon="eye" href="./node-views">
+    Create custom node renderers
+  </Card>
+  <Card title="Schemas" icon="diagram-project" href="./schemas">
+    Define document structure and validation
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/concepts/extensions">
+    Build powerful extensions
+  </Card>
+</CardGroup>

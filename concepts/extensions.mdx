@@ -1,0 +1,541 @@
+---
+title: Extensions
+description: Learn how to create, configure, and compose extensions to build powerful rich text editors
+---
+
+# Extensions
+
+Extensions are the fundamental building blocks of Remirror. Every feature in your editor—from basic text formatting to complex behaviors like mentions or collaboration—is implemented as an extension.
+
+<Info>
+  Extensions encapsulate related functionality into a single, composable unit. They can add schema nodes/marks, register commands, handle keyboard shortcuts, process pasted content, and much more.
+</Info>
+
+## Extension Types
+
+Remirror provides three extension base classes, each serving a different purpose:
+
+<Tabs>
+  <Tab title="NodeExtension">
+    **NodeExtension** - Creates ProseMirror nodes that appear in the document structure.
+    
+    Use for:
+    - Block elements (paragraphs, headings, blockquotes)
+    - Inline nodes (images, hard breaks)
+    - Custom content containers
+    
+    ```typescript
+    import { NodeExtension, NodeExtensionSpec } from 'remirror';
+    
+    class CalloutExtension extends NodeExtension {
+      get name() {
+        return 'callout' as const;
+      }
+      
+      createNodeSpec(): NodeExtensionSpec {
+        return {
+          content: 'block+',
+          group: 'block',
+          defining: true,
+          attrs: {
+            type: { default: 'info' },
+          },
+          parseDOM: [
+            {
+              tag: 'div[data-callout]',
+              getAttrs: (dom) => ({
+                type: (dom as HTMLElement).getAttribute('data-callout-type'),
+              }),
+            },
+          ],
+          toDOM: (node) => [
+            'div',
+            {
+              'data-callout': '',
+              'data-callout-type': node.attrs.type,
+              class: `callout callout-${node.attrs.type}`,
+            },
+            0,
+          ],
+        };
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="MarkExtension">
+    **MarkExtension** - Creates ProseMirror marks that annotate text ranges.
+    
+    Use for:
+    - Text formatting (bold, italic, underline)
+    - Links and references
+    - Comments and annotations
+    
+    ```typescript
+    import { MarkExtension, MarkExtensionSpec } from 'remirror';
+    import { toggleMark } from 'remirror';
+    
+    class HighlightExtension extends MarkExtension {
+      get name() {
+        return 'highlight' as const;
+      }
+      
+      createMarkSpec(): MarkExtensionSpec {
+        return {
+          attrs: {
+            color: { default: 'yellow' },
+          },
+          parseDOM: [
+            {
+              tag: 'mark',
+              getAttrs: (dom) => ({
+                color: (dom as HTMLElement).style.backgroundColor || 'yellow',
+              }),
+            },
+          ],
+          toDOM: (mark) => [
+            'mark',
+            {
+              style: `background-color: ${mark.attrs.color}`,
+            },
+            0,
+          ],
+        };
+      }
+      
+      createCommands() {
+        return {
+          toggleHighlight: (attrs?: { color?: string }) => {
+            return toggleMark({ type: this.type, attrs });
+          },
+        };
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="PlainExtension">
+    **PlainExtension** - Adds behavior without modifying the schema.
+    
+    Use for:
+    - Keyboard shortcuts
+    - Editor-wide behaviors
+    - Plugin functionality
+    - State tracking
+    
+    ```typescript
+    import { PlainExtension, extension } from 'remirror';
+    import { Plugin, PluginKey } from '@remirror/pm/state';
+    
+    @extension({})
+    class WordCountExtension extends PlainExtension {
+      get name() {
+        return 'wordCount' as const;
+      }
+      
+      createPlugin(): CreateExtensionPlugin {
+        const pluginKey = new PluginKey('wordCount');
+        
+        return {
+          state: {
+            init: (_, state) => this.countWords(state.doc),
+            apply: (tr, oldCount, oldState, newState) => {
+              if (!tr.docChanged) return oldCount;
+              return this.countWords(newState.doc);
+            },
+          },
+          key: pluginKey,
+        };
+      }
+      
+      createHelpers() {
+        return {
+          getWordCount: () => {
+            const pluginKey = new PluginKey('wordCount');
+            return pluginKey.getState(this.store.view.state);
+          },
+        };
+      }
+      
+      private countWords(doc: ProsemirrorNode): number {
+        return doc.textContent.split(/\s+/).filter(Boolean).length;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Extension Lifecycle
+
+Extensions hook into the editor lifecycle through several methods:
+
+### onCreate
+
+Called when the `RemirrorManager` is created, before the view exists.
+
+```typescript
+class MyExtension extends PlainExtension {
+  onCreate() {
+    // ✅ Available: schema, extensions, manager
+    console.log('Schema:', this.store.schema);
+    
+    // ❌ Not available yet: view, commands, helpers
+    // console.log(this.store.view); // Will throw error
+  }
+}
+```
+
+<Note>
+  Use `onCreate` sparingly. Most initialization should happen in `onView` when the full store is available.
+</Note>
+
+### onView
+
+Called when the ProseMirror view is attached. This is where commands and helpers become available.
+
+```typescript
+import { EditorView } from '@remirror/pm/view';
+
+class MyExtension extends PlainExtension {
+  onView(view: EditorView) {
+    // ✅ Full store now available
+    this.store.commands.insertText('Hello!');
+    
+    // Set up event listeners
+    this.addViewListener('focus', this.handleFocus);
+  }
+  
+  private handleFocus = () => {
+    console.log('Editor focused');
+  };
+}
+```
+
+### onStateUpdate
+
+Called whenever the editor state changes.
+
+```typescript
+import { StateUpdateLifecycleProps } from 'remirror';
+
+class MyExtension extends PlainExtension {
+  onStateUpdate(props: StateUpdateLifecycleProps) {
+    const { state, previousState, tr } = props;
+    
+    // Check if document changed
+    if (tr?.docChanged) {
+      console.log('Document modified');
+    }
+    
+    // Check selection changes
+    if (!state.selection.eq(previousState.selection)) {
+      console.log('Selection changed');
+    }
+  }
+}
+```
+
+<Tip>
+  `onStateUpdate` is called frequently. Keep logic lightweight and use memoization for expensive computations.
+</Tip>
+
+### onDestroy
+
+Called when the manager is being destroyed. Use for cleanup.
+
+```typescript
+class MyExtension extends PlainExtension {
+  private timerId?: NodeJS.Timeout;
+  
+  onView() {
+    this.timerId = setInterval(() => {
+      this.store.commands.insertText('.');
+    }, 1000);
+  }
+  
+  onDestroy() {
+    // Clean up to prevent memory leaks
+    if (this.timerId) {
+      clearInterval(this.timerId);
+    }
+  }
+}
+```
+
+## Extension Options
+
+Options configure extension behavior and come in different flavors:
+
+<Tabs>
+  <Tab title="Static Options">
+    **Static** options are set at instantiation and cannot change at runtime.
+    
+    Use for options that affect the schema:
+    
+    ```typescript
+    import { Static } from 'remirror';
+    
+    interface HeadingOptions {
+      levels: Static<number[]>;
+    }
+    
+    @extension<HeadingOptions>({
+      defaultOptions: { levels: [1, 2, 3, 4, 5, 6] },
+      staticKeys: ['levels'],
+    })
+    class HeadingExtension extends NodeExtension<HeadingOptions> {
+      get name() {
+        return 'heading' as const;
+      }
+      
+      createNodeSpec(): NodeExtensionSpec {
+        return {
+          attrs: {
+            level: { default: this.options.levels[0] },
+          },
+          // ... spec uses levels option
+        };
+      }
+    }
+    
+    // ✅ Set at creation
+    const heading = new HeadingExtension({ levels: [1, 2, 3] });
+    
+    // ❌ Cannot change at runtime (throws error)
+    // heading.setOptions({ levels: [1, 2] });
+    ```
+  </Tab>
+  
+  <Tab title="Dynamic Options">
+    **Dynamic** options can be updated at runtime.
+    
+    Options are dynamic by default:
+    
+    ```typescript
+    interface PlaceholderOptions {
+      placeholder?: string;
+    }
+    
+    @extension<PlaceholderOptions>({
+      defaultOptions: { placeholder: 'Type something...' },
+    })
+    class PlaceholderExtension extends PlainExtension<PlaceholderOptions> {
+      get name() {
+        return 'placeholder' as const;
+      }
+      
+      createPlugin(): CreateExtensionPlugin {
+        return {
+          props: {
+            decorations: (state) => {
+              if (!state.doc.textContent) {
+                return this.createPlaceholderDecoration(
+                  this.options.placeholder
+                );
+              }
+            },
+          },
+        };
+      }
+    }
+    
+    const placeholder = new PlaceholderExtension({
+      placeholder: 'Start typing...',
+    });
+    
+    // ✅ Can update at runtime
+    placeholder.setOptions({ placeholder: 'Write here...' });
+    ```
+  </Tab>
+  
+  <Tab title="Handler Options">
+    **Handler** options are event callbacks managed by Remirror.
+    
+    ```typescript
+    import { Handler } from 'remirror';
+    
+    interface LinkOptions {
+      onLinkClick?: Handler<(url: string) => void>;
+    }
+    
+    @extension<LinkOptions>({
+      defaultOptions: {},
+      handlerKeys: ['onLinkClick'],
+    })
+    class LinkExtension extends MarkExtension<LinkOptions> {
+      get name() {
+        return 'link' as const;
+      }
+      
+      createPlugin(): CreateExtensionPlugin {
+        return {
+          props: {
+            handleClick: (view, pos, event) => {
+              const link = this.getLinkAtPos(pos);
+              if (link) {
+                // Call all registered handlers
+                this.options.onLinkClick(link.attrs.href);
+                return true;
+              }
+              return false;
+            },
+          },
+        };
+      }
+    }
+    
+    const link = new LinkExtension();
+    
+    // Add handler (returns disposer)
+    const dispose = link.addHandler('onLinkClick', (url) => {
+      console.log('Link clicked:', url);
+    });
+    
+    // Remove handler later
+    dispose();
+    ```
+  </Tab>
+</Tabs>
+
+## Commands and Helpers
+
+Extensions expose functionality through commands (actions) and helpers (queries):
+
+### Creating Commands
+
+Commands modify the editor state:
+
+```typescript
+import { command, CommandFunction } from 'remirror';
+
+class BoldExtension extends MarkExtension {
+  @command()
+  toggleBold(): CommandFunction {
+    return toggleMark({ type: this.type });
+  }
+  
+  @command()
+  setBold(enabled: boolean): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const { from, to } = tr.selection;
+      
+      if (enabled) {
+        dispatch?.(tr.addMark(from, to, this.type.create()));
+      } else {
+        dispatch?.(tr.removeMark(from, to, this.type));
+      }
+      
+      return true;
+    };
+  }
+}
+
+// Usage
+manager.store.commands.toggleBold();
+manager.store.commands.setBold(true);
+```
+
+### Creating Helpers
+
+Helpers query editor state without modifying it:
+
+```typescript
+import { helper, Helper } from 'remirror';
+
+class BoldExtension extends MarkExtension {
+  @helper()
+  isBoldActive(): Helper<boolean> {
+    return ({ state }) => {
+      const { from, to, empty } = state.selection;
+      
+      if (empty) {
+        return this.type.isInSet(state.storedMarks || []) !== undefined;
+      }
+      
+      return state.doc.rangeHasMark(from, to, this.type);
+    };
+  }
+}
+
+// Usage
+const isActive = manager.store.helpers.isBoldActive();
+```
+
+<Info>
+  Commands return `CommandFunction` that receives ProseMirror state and can dispatch transactions. Helpers return `Helper<T>` that receives state and returns a value.
+</Info>
+
+## Extension Tags
+
+Tags categorize extensions for querying and behavior:
+
+```typescript
+import { ExtensionTag } from 'remirror';
+
+class ParagraphExtension extends NodeExtension {
+  createTags() {
+    return [ExtensionTag.Block, ExtensionTag.TextBlock];
+  }
+}
+
+// Query by tag
+const blockNodes = manager.store.extensions.filter(
+  (ext) => ext.tags.includes(ExtensionTag.Block)
+);
+```
+
+Common tags:
+- `ExtensionTag.Block` - Block-level nodes
+- `ExtensionTag.Inline` - Inline nodes
+- `ExtensionTag.Mark` - Mark extensions
+- `ExtensionTag.TextBlock` - Blocks containing text
+- `ExtensionTag.FormattingMark` - Text formatting marks
+
+## Decorators
+
+The `@extension` decorator configures extension behavior:
+
+```typescript
+import { extension, ExtensionPriority } from 'remirror';
+
+@extension<MyOptions>({
+  // Default option values
+  defaultOptions: {
+    color: 'blue',
+    enabled: true,
+  },
+  
+  // Options that can't change at runtime
+  staticKeys: ['nodeType'],
+  
+  // Event handler options
+  handlerKeys: ['onChange', 'onFocus'],
+  
+  // Default priority
+  defaultPriority: ExtensionPriority.High,
+})
+class MyExtension extends PlainExtension<MyOptions> {
+  // ...
+}
+```
+
+<Tip>
+  You can also set these as static properties if you prefer not to use decorators.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Presets" icon="layer-group" href="./presets">
+    Compose extensions into reusable presets
+  </Card>
+  <Card title="Manager" icon="gear" href="./manager">
+    Understand how the manager orchestrates extensions
+  </Card>
+  <Card title="Priority" icon="arrow-up-1-9" href="./priority">
+    Control extension execution order
+  </Card>
+  <Card title="Extension List" icon="list" href="/extensions">
+    Browse available extensions
+  </Card>
+</CardGroup>

@@ -1,0 +1,379 @@
+---
+title: 'React Preset'
+description: 'Essential React integration with placeholder and component rendering support'
+---
+
+## Overview
+
+The `ReactExtension` provides all required functionality for using Remirror with React. It combines placeholder support and React component rendering capabilities into a single extension, making it easy to integrate Remirror into React applications.
+
+<Note>
+  The React preset is automatically included when using `@remirror/react` components like `<Remirror>` and `useRemirror()`.
+</Note>
+
+## Installation
+
+```bash
+npm install @remirror/preset-react
+```
+
+## Usage
+
+<CodeGroup>
+```typescript Basic Usage
+import { ReactExtension } from '@remirror/preset-react';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create([
+  new ReactExtension(),
+  // your other extensions
+]);
+```
+
+```typescript With Options
+import { ReactExtension } from '@remirror/preset-react';
+
+const reactExtension = new ReactExtension({
+  placeholder: 'Start typing...',
+  emptyNodeClass: 'is-empty',
+  defaultBlockNode: 'paragraph',
+});
+```
+
+```typescript With React Components
+import { ReactExtension } from '@remirror/preset-react';
+import { useRemirror, Remirror } from '@remirror/react';
+
+function MyEditor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new ReactExtension({
+        placeholder: 'Type something amazing...',
+      }),
+    ],
+  });
+  
+  return <Remirror manager={manager} />;
+}
+```
+</CodeGroup>
+
+## Features
+
+The React extension provides two main capabilities:
+
+### Placeholder Support
+
+Displays placeholder text in empty nodes, improving the user experience.
+
+**Features:**
+- Customizable placeholder text
+- Empty node styling
+- Automatic show/hide based on content
+- Per-node placeholders
+
+### React Component Rendering
+
+Enables rendering of custom React components as node views.
+
+**Features:**
+- React components as node views
+- SSR (Server-Side Rendering) support
+- Full React lifecycle support
+- Props and state management
+- Event handling
+
+## Options
+
+The ReactExtension combines options from PlaceholderExtension and ReactComponentExtension:
+
+### Placeholder Options
+
+<ParamField path="placeholder" type="string | PlaceholderConfig">
+  The placeholder text to display in empty nodes.
+  
+  <CodeGroup>
+  ```typescript String
+  new ReactExtension({
+    placeholder: 'Start typing...'
+  })
+  ```
+  
+  ```typescript Config Object
+  new ReactExtension({
+    placeholder: {
+      paragraph: 'Write something...',
+      heading: 'Enter a title...',
+      codeBlock: 'Paste code here...',
+    }
+  })
+  ```
+  </CodeGroup>
+</ParamField>
+
+<ParamField path="emptyNodeClass" type="string">
+  CSS class name to apply to empty nodes.
+  
+  **Default:** `'placeholder'`
+  
+  **Example:**
+  ```typescript
+  new ReactExtension({
+    emptyNodeClass: 'is-empty'
+  })
+  ```
+</ParamField>
+
+### React Component Options
+
+<ParamField path="defaultBlockNode" type="string">
+  Default block node type for React components.
+</ParamField>
+
+<ParamField path="defaultContentNode" type="string">
+  Default content node type.
+</ParamField>
+
+<ParamField path="defaultEnvironment" type="RenderEnvironment">
+  Default rendering environment (browser, SSR, etc.).
+</ParamField>
+
+<ParamField path="defaultInlineNode" type="string">
+  Default inline node type for React components.
+</ParamField>
+
+<ParamField path="nodeViewComponents" type="Record<string, ComponentType>">
+  Map of node names to React component implementations.
+  
+  **Example:**
+  ```typescript
+  new ReactExtension({
+    nodeViewComponents: {
+      customBlock: CustomBlockComponent,
+      customInline: CustomInlineComponent,
+    }
+  })
+  ```
+</ParamField>
+
+## Composed Extensions
+
+The ReactExtension internally creates and manages two extensions:
+
+### PlaceholderExtension
+
+Handles placeholder text display in empty nodes.
+
+**Priority:** Low (runs after most other extensions)
+
+### ReactComponentExtension
+
+Manages React component node views and SSR support.
+
+## Examples
+
+### Simple Placeholder
+
+```typescript
+import { ReactExtension } from '@remirror/preset-react';
+import { useRemirror, Remirror } from '@remirror/react';
+
+function Editor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new ReactExtension({
+        placeholder: 'What\'s on your mind?',
+      }),
+    ],
+  });
+  
+  return <Remirror manager={manager} />;
+}
+```
+
+### Per-Node Placeholders
+
+```typescript
+import { ReactExtension } from '@remirror/preset-react';
+import { HeadingExtension } from '@remirror/extension-heading';
+import { useRemirror, Remirror } from '@remirror/react';
+
+function Editor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new HeadingExtension(),
+      new ReactExtension({
+        placeholder: {
+          paragraph: 'Tell your story...',
+          heading: 'Untitled',
+          blockquote: 'Quote something...',
+        },
+      }),
+    ],
+  });
+  
+  return <Remirror manager={manager} />;
+}
+```
+
+### Custom Node View Components
+
+```typescript
+import { ReactExtension } from '@remirror/preset-react';
+import { useRemirror, Remirror } from '@remirror/react';
+import { NodeViewComponentProps } from '@remirror/react';
+
+// Custom node view component
+function CustomBlock({ node, updateAttributes }: NodeViewComponentProps) {
+  return (
+    <div className="custom-block">
+      <h3>{node.attrs.title}</h3>
+      <div>{node.textContent}</div>
+    </div>
+  );
+}
+
+function Editor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new ReactExtension({
+        nodeViewComponents: {
+          customBlock: CustomBlock,
+        },
+      }),
+    ],
+  });
+  
+  return <Remirror manager={manager} />;
+}
+```
+
+### Updating Placeholder Dynamically
+
+```typescript
+import { ReactExtension } from '@remirror/preset-react';
+import { useRemirror, Remirror, useExtension } from '@remirror/react';
+import { useState } from 'react';
+
+function Editor() {
+  const [placeholder, setPlaceholder] = useState('Start typing...');
+  
+  const { manager } = useRemirror({
+    extensions: () => [
+      new ReactExtension({ placeholder }),
+    ],
+  });
+  
+  return (
+    <>
+      <input 
+        value={placeholder}
+        onChange={(e) => setPlaceholder(e.target.value)}
+        placeholder="Change placeholder"
+      />
+      <Remirror manager={manager} />
+    </>
+  );
+}
+```
+
+### Styling Empty Nodes
+
+```typescript
+import { ReactExtension } from '@remirror/preset-react';
+import { useRemirror, Remirror } from '@remirror/react';
+
+function Editor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new ReactExtension({
+        placeholder: 'Start typing...',
+        emptyNodeClass: 'is-empty',
+      }),
+    ],
+  });
+  
+  return (
+    <>
+      <style>{`
+        .is-empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+          position: absolute;
+        }
+      `}</style>
+      <Remirror manager={manager} />
+    </>
+  );
+}
+```
+
+## API Reference
+
+### ReactExtension
+
+Extends `PlainExtension` and provides React-specific functionality.
+
+**Constructor:**
+```typescript
+class ReactExtension extends PlainExtension<ReactExtensionOptions> {
+  constructor(options?: ReactExtensionOptions);
+}
+```
+
+### Methods
+
+#### setOptions()
+
+Update extension options dynamically.
+
+```typescript
+reactExtension.setOptions({
+  placeholder: 'New placeholder text'
+});
+```
+
+#### createExtensions()
+
+Internal method that creates the PlaceholderExtension and ReactComponentExtension.
+
+## TypeScript
+
+### ReactExtensionOptions
+
+```typescript
+interface ReactExtensionOptions 
+  extends PlaceholderOptions, 
+          ReactComponentOptions {}
+```
+
+### PlaceholderOptions
+
+```typescript
+interface PlaceholderOptions {
+  placeholder?: string | PlaceholderConfig;
+  emptyNodeClass?: string;
+}
+
+type PlaceholderConfig = Record<string, string>;
+```
+
+### ReactComponentOptions
+
+```typescript
+interface ReactComponentOptions {
+  defaultBlockNode?: string;
+  defaultContentNode?: string;
+  defaultEnvironment?: RenderEnvironment;
+  defaultInlineNode?: string;
+  nodeViewComponents?: Record<string, ComponentType<NodeViewComponentProps>>;
+}
+```
+
+## Related
+
+- [Core Preset](/api/presets/core) - Essential editor functionality
+- [Placeholder Extension](/api/extensions/placeholder)
+- [React Component Extension](/api/extensions/react-component)
+- [React Guide](/guides/react) - Using Remirror with React

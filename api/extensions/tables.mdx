@@ -1,0 +1,500 @@
+---
+title: Table Extensions
+description: Full-featured table support with cell merging, resizing, and advanced manipulation
+---
+
+Table extensions provide comprehensive spreadsheet-like table functionality in your editor.
+
+## TableExtension
+
+Core table support with rows, cells, and advanced features.
+
+### Installation
+
+```typescript
+import { TableExtension } from 'remirror/extensions';
+
+const extensions = () => [new TableExtension()];
+```
+
+### Options
+
+<ParamField path="resizable" type="boolean" default="true">
+  Enable column resizing
+  
+  ```typescript
+  new TableExtension({ resizable: true })
+  ```
+</ParamField>
+
+<ParamField path="resizeableOptions" type="TableResizableOptions">
+  Column resizing configuration
+  
+  <ParamField path="resizeableOptions.handleWidth" type="number">
+    Width of resize handles in pixels
+  </ParamField>
+  
+  <ParamField path="resizeableOptions.cellMinWidth" type="number">
+    Minimum cell width in pixels
+  </ParamField>
+  
+  ```typescript
+  new TableExtension({ 
+    resizeableOptions: {
+      handleWidth: 5,
+      cellMinWidth: 25
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="tabKeyboardShortcuts" type="boolean" default="false">
+  Use Tab/Shift-Tab for cell navigation
+  
+  ```typescript
+  new TableExtension({ tabKeyboardShortcuts: true })
+  ```
+</ParamField>
+
+### Commands
+
+#### `createTable(options?)`
+
+Create a new table at the current position.
+
+<ParamField path="options.rowsCount" type="number" default="3">
+  Number of rows
+</ParamField>
+
+<ParamField path="options.columnsCount" type="number" default="3">
+  Number of columns
+</ParamField>
+
+<ParamField path="options.withHeaderRow" type="boolean" default="true">
+  Include header row
+</ParamField>
+
+```typescript
+// Create default 3x3 table
+commands.createTable();
+
+// Create custom 5x4 table
+commands.createTable({ 
+  rowsCount: 5, 
+  columnsCount: 4,
+  withHeaderRow: true 
+});
+```
+
+#### `deleteTable()`
+
+Delete the entire table.
+
+```typescript
+commands.deleteTable();
+```
+
+---
+
+## Column Commands
+
+#### `addTableColumnBefore()`
+
+Add a column before the current selection.
+
+```typescript
+commands.addTableColumnBefore();
+```
+
+#### `addTableColumnAfter()`
+
+Add a column after the current selection.
+
+```typescript
+commands.addTableColumnAfter();
+```
+
+#### `deleteTableColumn()`
+
+Delete the current column.
+
+```typescript
+commands.deleteTableColumn();
+```
+
+---
+
+## Row Commands
+
+#### `addTableRowBefore()`
+
+Add a row before the current selection.
+
+```typescript
+commands.addTableRowBefore();
+```
+
+#### `addTableRowAfter()`
+
+Add a row after the current selection.
+
+```typescript
+commands.addTableRowAfter();
+```
+
+#### `deleteTableRow()`
+
+Delete the current row.
+
+```typescript
+commands.deleteTableRow();
+```
+
+---
+
+## Cell Commands
+
+#### `mergeTableCells()`
+
+Merge selected cells.
+
+```typescript
+commands.mergeTableCells();
+```
+
+#### `splitTableCell()`
+
+Split a merged cell.
+
+```typescript
+commands.splitTableCell();
+```
+
+#### `toggleTableCellMerge()`
+
+Toggle between merged and split states.
+
+```typescript
+commands.toggleTableCellMerge();
+```
+
+#### `setTableCellBackground(color)`
+
+Set cell background color.
+
+<ParamField path="color" type="string | null" required>
+  Background color (hex, rgb, or null to remove)
+</ParamField>
+
+```typescript
+commands.setTableCellBackground('#FFE5E5');
+commands.setTableCellBackground('rgb(255, 229, 229)');
+commands.setTableCellBackground(null); // Remove background
+```
+
+#### `setTableCellAttribute(name, value)`
+
+Set custom cell attribute.
+
+```typescript
+commands.setTableCellAttribute('colspan', 2);
+commands.setTableCellAttribute('rowspan', 3);
+```
+
+---
+
+## Header Commands
+
+#### `toggleTableHeader(type?)`
+
+Toggle row or column as header.
+
+<ParamField path="type" type="'row' | 'column'" default="'row'">
+  Header type to toggle
+</ParamField>
+
+```typescript
+commands.toggleTableHeader('row');
+commands.toggleTableHeader('column');
+```
+
+#### `toggleTableHeaderRow()`
+
+Toggle first row as header.
+
+```typescript
+commands.toggleTableHeaderRow();
+```
+
+#### `toggleTableHeaderColumn()`
+
+Toggle first column as header.
+
+```typescript
+commands.toggleTableHeaderColumn();
+```
+
+#### `toggleTableHeaderCell()`
+
+Toggle current cell as header.
+
+```typescript
+commands.toggleTableHeaderCell();
+```
+
+---
+
+## Selection Commands
+
+#### `selectParentCell()`
+
+Select the parent cell of the current position.
+
+```typescript
+commands.selectParentCell();
+```
+
+#### `expandCellSelection(type?)`
+
+Expand cell selection to full row, column, or both.
+
+<ParamField path="type" type="'row' | 'column' | 'all'" default="'all'">
+  Expansion direction
+</ParamField>
+
+```typescript
+commands.expandCellSelection('row');
+commands.expandCellSelection('column');
+commands.expandCellSelection('all');
+```
+
+---
+
+## Helpers
+
+#### `tableHasHeader(type?, state?)`
+
+Check if table has header row/column.
+
+<ParamField path="type" type="'row' | 'column'" default="'row'">
+  Header type to check
+</ParamField>
+
+```typescript
+const hasHeaderRow = helpers.tableHasHeader('row');
+const hasHeaderColumn = helpers.tableHasHeader('column');
+```
+
+#### `enableTableSupport()`
+
+Enable browser table support (disables browser default table editing).
+
+```typescript
+helpers.enableTableSupport();
+```
+
+---
+
+## Keyboard Shortcuts
+
+When `tabKeyboardShortcuts` is enabled:
+
+- `Tab` - Move to next cell
+- `Shift-Tab` - Move to previous cell
+
+---
+
+## TableRowExtension
+
+Defines table row nodes. Automatically included by `TableExtension`.
+
+### Schema
+
+```typescript
+tableRow {
+  tableCell+ | tableHeaderCell+
+}
+```
+
+---
+
+## TableCellExtension
+
+Defines standard table cell nodes. Automatically included.
+
+### Schema
+
+```typescript
+tableCell {
+  attrs: {
+    colspan: number // Default: 1
+    rowspan: number // Default: 1
+    colwidth: number[] | null
+    background: string | null
+  }
+  block+ // Cell content
+}
+```
+
+---
+
+## TableHeaderCellExtension
+
+Defines header cell nodes. Automatically included.
+
+### Schema
+
+```typescript
+tableHeaderCell {
+  attrs: {
+    colspan: number
+    rowspan: number
+    colwidth: number[] | null
+    background: string | null
+  }
+  block+ // Cell content
+}
+```
+
+---
+
+## Usage Example
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { TableExtension } from 'remirror/extensions';
+
+function TableEditor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new TableExtension({
+        resizable: true,
+        tabKeyboardShortcuts: true,
+        resizeableOptions: {
+          cellMinWidth: 50,
+        },
+      }),
+    ],
+  });
+
+  const createTable = () => {
+    manager.commands.createTable({
+      rowsCount: 4,
+      columnsCount: 3,
+      withHeaderRow: true,
+    });
+  };
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button onClick={createTable}>Create Table</button>
+        <button onClick={() => manager.commands.addTableRowBefore()}>
+          Add Row Above
+        </button>
+        <button onClick={() => manager.commands.addTableRowAfter()}>
+          Add Row Below
+        </button>
+        <button onClick={() => manager.commands.addTableColumnBefore()}>
+          Add Column Left
+        </button>
+        <button onClick={() => manager.commands.addTableColumnAfter()}>
+          Add Column Right
+        </button>
+        <button onClick={() => manager.commands.deleteTableRow()}>
+          Delete Row
+        </button>
+        <button onClick={() => manager.commands.deleteTableColumn()}>
+          Delete Column
+        </button>
+        <button onClick={() => manager.commands.mergeTableCells()}>
+          Merge Cells
+        </button>
+        <button onClick={() => manager.commands.splitTableCell()}>
+          Split Cell
+        </button>
+        <button onClick={() => manager.commands.deleteTable()}>
+          Delete Table
+        </button>
+      </div>
+      <Remirror manager={manager} />
+    </div>
+  );
+}
+```
+
+## Advanced Features
+
+### Cell Merging
+
+Merge cells by selecting multiple cells and using `mergeTableCells()`:
+
+```typescript
+// Select cells then merge
+commands.mergeTableCells();
+
+// Split merged cell
+commands.splitTableCell();
+```
+
+### Column Resizing
+
+When `resizable: true`, users can drag column borders to resize:
+
+```typescript
+new TableExtension({
+  resizable: true,
+  resizeableOptions: {
+    handleWidth: 5,        // Resize handle width
+    cellMinWidth: 25,      // Minimum column width
+  },
+});
+```
+
+### Cell Backgrounds
+
+Apply background colors to cells:
+
+```typescript
+// Set background
+commands.setTableCellBackground('#FFE5E5');
+
+// Remove background
+commands.setTableCellBackground(null);
+```
+
+### Header Rows/Columns
+
+Designate rows or columns as headers:
+
+```typescript
+// Toggle first row as header
+commands.toggleTableHeaderRow();
+
+// Toggle first column as header
+commands.toggleTableHeaderColumn();
+
+// Check if has header
+if (helpers.tableHasHeader('row')) {
+  // Table has header row
+}
+```
+
+## React Tables Extension
+
+For advanced React-specific table features:
+
+```typescript
+import { ReactTablesExtension } from 'remirror/extensions';
+
+const extensions = () => [
+  new ReactTablesExtension(),
+];
+```
+
+Provides React components for table controls and cell editing.
+
+## Related
+
+- [Block Elements](/api/extensions/block-elements)
+- [Lists](/api/extensions/lists)

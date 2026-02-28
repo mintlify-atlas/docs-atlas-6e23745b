@@ -1,0 +1,343 @@
+---
+title: 'Migrating from v1 to v2'
+description: 'Complete guide to upgrading from Remirror v1 to v2 with TypeScript changes and component updates'
+---
+
+# Migration to Remirror v2
+
+This guide provides the required steps to migrate from Remirror v1 to Remirror v2.
+
+Remirror v2 introduces official TypeScript support for ProseMirror packages and modernizes React components with Material-UI.
+
+## Installing
+
+<Warning>
+  If you are using TypeScript, **remove all `@types/prosemirror-*` dependencies** from your `package.json` before upgrading. For example:
+  - `@types/prosemirror-model`
+  - `@types/prosemirror-view`
+  - `@types/prosemirror-state`
+  - `@types/prosemirror-transform`
+</Warning>
+
+<Steps>
+  <Step title="Update Remirror packages">
+    Use [`npm-check-updates`](https://www.npmjs.com/package/npm-check-updates) to update all Remirror and ProseMirror packages:
+    
+    ```bash
+    npx npm-check-updates --filter '/remirror|prosemirror/' --deep --upgrade --target greatest
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    Install the updated packages:
+    
+    ```bash
+    npm install
+    # or
+    yarn install
+    # or
+    pnpm install
+    ```
+  </Step>
+</Steps>
+
+## Deduplicate Dependencies
+
+<Warning>
+  Remirror is a monorepo with multiple packages. Some package managers may install duplicate versions of the same package, which can cause runtime issues.
+</Warning>
+
+Check your lockfile for duplicate versions of these critical packages:
+
+- `prosemirror-state`
+- `prosemirror-model`
+- `@remirror/core`
+- `@remirror/pm`
+
+### Deduplication Strategies
+
+<Accordion title="npm">
+  Run the built-in dedupe command:
+  
+  ```bash
+  npm dedupe
+  ```
+  
+  Verify the lockfile (`package-lock.json`) to ensure duplicates are removed.
+</Accordion>
+
+<Accordion title="yarn v1">
+  Install and use the third-party tool [`yarn-deduplicate`](https://www.npmjs.com/package/yarn-deduplicate):
+  
+  ```bash
+  npx yarn-deduplicate yarn.lock
+  yarn install
+  ```
+</Accordion>
+
+<Accordion title="yarn v2+">
+  Run the built-in dedupe command:
+  
+  ```bash
+  yarn dedupe
+  ```
+</Accordion>
+
+<Accordion title="pnpm">
+  Run the built-in dedupe command:
+  
+  ```bash
+  pnpm dedupe
+  ```
+</Accordion>
+
+### Nuclear Option
+
+<Warning>
+  This will update **all** packages in your project, not just Remirror packages.
+</Warning>
+
+If deduplication doesn't work, remove the lockfile and `node_modules`:
+
+```bash
+rm -rf node_modules package-lock.json  # or yarn.lock or pnpm-lock.yaml
+npm install
+```
+
+## TypeScript Updates
+
+### ProseMirror TypeScript Changes
+
+ProseMirror packages now ship with official TypeScript definitions. The most significant difference is that the `Schema` generic has been removed.
+
+<CodeGroup>
+```ts Before (v1)
+import { Transaction } from 'prosemirror-state';
+
+// Schema was part of the generic type
+function updateDoc(tr: Transaction<Schema>) {
+  // ...
+}
+```
+
+```ts After (v2)
+import { Transaction } from 'prosemirror-state';
+
+// No Schema generic
+function updateDoc(tr: Transaction) {
+  // ...
+}
+```
+</CodeGroup>
+
+### Other TypeScript Differences
+
+The official ProseMirror typings include minor differences from the community `@types/prosemirror-*` packages:
+
+- Some parameters now have `readonly` modifiers
+- Stricter null checking in some APIs
+- Updated return types for better type inference
+
+For more details, see the [ProseMirror TypeScript announcement](https://discuss.prosemirror.net/t/prosemirror-is-now-a-typescript-project/4624/).
+
+## Pre-packaged React Components
+
+<Warning>
+  Remirror v2 completely replaces the React components from v1. The new components are based on [MUI](https://mui.com/) instead of [Reakit](https://reakit.io).
+</Warning>
+
+### Component Philosophy Change
+
+Remirror v1 used a single toolbar component that accepted a complex configuration array. This proved inflexible in practice:
+
+<CodeGroup>
+```tsx v1 Approach (Configuration Array)
+import { Toolbar } from '@remirror/react';
+
+const config = [
+  { type: 'button', command: 'toggleBold' },
+  { type: 'button', command: 'toggleItalic' },
+  { type: 'button', command: 'toggleUnderline' },
+];
+
+<Toolbar config={config} />
+```
+
+```tsx v2 Approach (Dedicated Components)
+import { 
+  Toolbar, 
+  ToggleBoldButton, 
+  ToggleItalicButton, 
+  ToggleUnderlineButton 
+} from '@remirror/react';
+
+<Toolbar>
+  <ToggleBoldButton />
+  <ToggleItalicButton />
+  <ToggleUnderlineButton />
+</Toolbar>
+```
+</CodeGroup>
+
+### Benefits of v2 Components
+
+- **Single Responsibility**: Each command has a dedicated button component
+- **Customizable**: Override icons, labels, and tooltips via props
+- **Composable**: Use button group components for common collections
+- **Extensible**: Render the base button component for custom commands
+
+### Button Components
+
+Remirror v2 provides dedicated button components for common commands:
+
+```tsx
+import {
+  ToggleBoldButton,
+  ToggleItalicButton,
+  ToggleUnderlineButton,
+  ToggleStrikeButton,
+  ToggleCodeButton,
+  ToggleHeadingButton,
+  ToggleBulletListButton,
+  ToggleOrderedListButton,
+  ToggleBlockquoteButton,
+  UndoButton,
+  RedoButton,
+} from '@remirror/react';
+
+<Toolbar>
+  <ToggleBoldButton icon={CustomBoldIcon} label="Bold" />
+  <ToggleItalicButton tooltip="Italicize text" />
+  <ToggleUnderlineButton />
+</Toolbar>
+```
+
+### Button Groups
+
+Button group components provide standard collections:
+
+```tsx
+import {
+  Toolbar,
+  BasicFormattingButtonGroup,
+  HistoryButtonGroup,
+  ListButtonGroup,
+} from '@remirror/react';
+
+<Toolbar>
+  <BasicFormattingButtonGroup />
+  <HistoryButtonGroup />
+  <ListButtonGroup />
+</Toolbar>
+```
+
+### Custom Buttons
+
+For commands without dedicated buttons, use the base `CommandButton`:
+
+```tsx
+import { CommandButton } from '@remirror/react';
+import { useCommands } from '@remirror/react';
+
+const CustomButton = () => {
+  const { insertText } = useCommands();
+  
+  return (
+    <CommandButton
+      commandName="insertText"
+      onSelect={() => insertText('Hello!')}
+      enabled
+      icon={MyIcon}
+      label="Insert Hello"
+    />
+  );
+};
+```
+
+### Complete Example
+
+<CodeGroup>
+```tsx Before (v1)
+import React from 'react';
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+import { Remirror, Toolbar, useRemirror } from '@remirror/react';
+
+const extensions = () => [new BoldExtension(), new ItalicExtension()];
+
+const toolbarConfig = [
+  { type: 'button', command: 'toggleBold', icon: 'bold' },
+  { type: 'button', command: 'toggleItalic', icon: 'italic' },
+];
+
+const Editor = () => {
+  const { manager, state } = useRemirror({ 
+    extensions, 
+    content: '<p>Hello world</p>',
+    stringHandler: 'html'
+  });
+
+  return (
+    <Remirror manager={manager} initialContent={state}>
+      <Toolbar config={toolbarConfig} />
+    </Remirror>
+  );
+};
+```
+
+```tsx After (v2)
+import React from 'react';
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+import { 
+  Remirror, 
+  ThemeProvider,
+  Toolbar, 
+  ToggleBoldButton,
+  ToggleItalicButton,
+  useRemirror 
+} from '@remirror/react';
+
+const extensions = () => [new BoldExtension(), new ItalicExtension()];
+
+const Editor = () => {
+  const { manager, state, onChange } = useRemirror({ 
+    extensions, 
+    content: '<p>Hello world</p>',
+    stringHandler: 'html'
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror 
+        manager={manager} 
+        initialContent={state}
+        onChange={onChange}
+        autoRender='end'
+      >
+        <Toolbar>
+          <ToggleBoldButton />
+          <ToggleItalicButton />
+        </Toolbar>
+      </Remirror>
+    </ThemeProvider>
+  );
+};
+```
+</CodeGroup>
+
+## Future Improvements
+
+Remirror v2 lays the groundwork for future enhancements:
+
+- Slash commands (à la Notion)
+- Additional pre-built components
+- More flexible theming options
+
+We welcome feedback and contributions! Join us on [Discord](https://remirror.io/chat) to share your ideas.
+
+## Need Help?
+
+If you encounter any issues during migration:
+
+- Consult the [announcement post](/blog/announcement-v2) for more details
+- Ask questions on [Discord](https://remirror.io/chat)
+- Review the [ProseMirror TypeScript guide](https://discuss.prosemirror.net/t/prosemirror-is-now-a-typescript-project/4624/)

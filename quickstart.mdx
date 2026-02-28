@@ -1,80 +1,269 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Build your first Remirror editor in 5 minutes with our WYSIWYG component
 ---
 
-## Get started in three steps
+# 5 Minute Tutorial
 
-Get your documentation site running locally and make your first customization.
+This tutorial walks you through creating a simple React app with Remirror's ready-to-use WYSIWYG Editor. You'll have a fully functional rich text editor running in just a few minutes.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+You need to have a recent version of Node.js installed (v14.21.3 or higher).
 
-### Step 2: Deploy your changes
+## Step-by-Step Guide
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Create a React app">
+    First, let's set up a basic React app with [Vite](https://vitejs.dev/guide/):
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    npx create-vite vite-remirror --template react-ts
+    cd vite-remirror
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    This creates a new React + TypeScript project using Vite as the build tool.
+  </Step>
 
-### Step 3: Go live
+  <Step title="Install Remirror packages">
+    Install Remirror and its peer dependencies:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <CodeGroup>
+    ```bash npm
+    npm add remirror @remirror/react @remirror/pm @emotion/react @emotion/styled @remirror/react-editors
+    ```
 
-## Next steps
+    ```bash yarn
+    yarn add remirror @remirror/react @remirror/pm @emotion/react @emotion/styled @remirror/react-editors
+    ```
 
-Now that you have your docs running, explore these key features:
+    ```bash pnpm
+    pnpm add remirror @remirror/react @remirror/pm @emotion/react @emotion/styled @remirror/react-editors
+    ```
+    </CodeGroup>
 
-<CardGroup cols={2}>
+    <Note>
+      The `@emotion/react` and `@emotion/styled` packages are required for the pre-built editor components. If you're building a custom editor from scratch, you may not need them.
+    </Note>
+  </Step>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Step title="Create your first editor">
+    Replace the contents of `src/App.tsx` with the following code:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    ```tsx src/App.tsx
+    import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    const App: React.FC = () => {
+      return (
+        <div style={{ padding: 16 }}>
+          <WysiwygEditor placeholder='Enter text...' />
+        </div>
+      );
+    };
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+    export default App;
+    ```
 
-</CardGroup>
+    That's it! The `WysiwygEditor` component comes with everything you need: formatting buttons, keyboard shortcuts, and markdown input rules.
+  </Step>
+
+  <Step title="Start the development server">
+    Run the app:
+
+    ```bash
+    npm run dev
+    ```
+
+    <Tip>
+      Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:5173`). You should see a fully functional WYSIWYG editor!
+    </Tip>
+  </Step>
+</Steps>
+
+## Working with Editor Data
+
+Now that you have a working editor, let's learn how to get data out and put data in.
+
+<Tip>
+  Using **JSON** is recommended for storing editor content. It's simpler for data migrations, search indexing, and other programmatic operations compared to HTML.
+</Tip>
+
+### Capturing Content Changes
+
+Remirror provides components that let you react to content changes:
+
+- **`OnChangeJSON`** (Recommended): Provides a JSON representation of the document
+- **`OnChangeHTML`**: Provides an HTML string representation
+
+```tsx src/App.tsx
+import { useCallback } from 'react';
+import type { RemirrorJSON } from 'remirror';
+import { OnChangeJSON } from '@remirror/react';
+import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
+
+const STORAGE_KEY = 'remirror-editor-content';
+
+const App: React.FC = () => {
+  const handleEditorChange = useCallback((json: RemirrorJSON) => {
+    // Store the JSON in localStorage
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+  }, []);
+
+  return <MyEditor onChange={handleEditorChange} />;
+};
+
+interface MyEditorProps {
+  onChange: (json: RemirrorJSON) => void;
+}
+
+const MyEditor: React.FC<MyEditorProps> = ({ onChange }) => {
+  return (
+    <div style={{ padding: 16 }}>
+      <WysiwygEditor placeholder='Enter text...'>
+        <OnChangeJSON onChange={onChange} />
+      </WysiwygEditor>
+    </div>
+  );
+};
+
+export default App;
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  In this example, we're using `localStorage` for simplicity. In a real application, you'd typically save to a database via an API call.
 </Note>
+
+### Setting Initial Content
+
+To load saved content back into the editor, use the `initialContent` prop:
+
+```tsx src/App.tsx
+import { useCallback, useState } from 'react';
+import type { RemirrorJSON } from 'remirror';
+import { OnChangeJSON } from '@remirror/react';
+import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
+
+const STORAGE_KEY = 'remirror-editor-content';
+
+const App: React.FC = () => {
+  const [initialContent] = useState<RemirrorJSON | undefined>(() => {
+    // Retrieve the JSON from localStorage (or undefined if not found)
+    const content = window.localStorage.getItem(STORAGE_KEY);
+    return content ? JSON.parse(content) : undefined;
+  });
+
+  const handleEditorChange = useCallback((json: RemirrorJSON) => {
+    // Store the JSON in localStorage
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+  }, []);
+
+  return <MyEditor onChange={handleEditorChange} initialContent={initialContent} />;
+};
+
+interface MyEditorProps {
+  onChange: (json: RemirrorJSON) => void;
+  initialContent?: RemirrorJSON;
+}
+
+const MyEditor: React.FC<MyEditorProps> = ({ onChange, initialContent }) => {
+  return (
+    <div style={{ padding: 16 }}>
+      <WysiwygEditor placeholder='Enter text...' initialContent={initialContent}>
+        <OnChangeJSON onChange={onChange} />
+      </WysiwygEditor>
+    </div>
+  );
+};
+
+export default App;
+```
+
+## Understanding the JSON Format
+
+The `RemirrorJSON` type represents the ProseMirror document structure. Here's what it looks like:
+
+```json
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Hello " },
+        {
+          "type": "text",
+          "text": "world",
+          "marks": [{ "type": "bold" }]
+        }
+      ]
+    }
+  ]
+}
+```
+
+This structure preserves all formatting, structure, and metadata in your document.
+
+## What's Included in WysiwygEditor?
+
+The `WysiwygEditor` component comes pre-configured with:
+
+<CardGroup cols={2}>
+  <Card title="Text Formatting" icon="bold">
+    Bold, italic, underline, strikethrough, code
+  </Card>
+  
+  <Card title="Headings" icon="heading">
+    H1 through H6 heading levels
+  </Card>
+  
+  <Card title="Lists" icon="list">
+    Ordered lists, bullet lists, and task lists
+  </Card>
+  
+  <Card title="Rich Content" icon="image">
+    Links, images, code blocks, and blockquotes
+  </Card>
+  
+  <Card title="Keyboard Shortcuts" icon="keyboard">
+    Familiar shortcuts like Cmd+B for bold
+  </Card>
+  
+  <Card title="Markdown Input" icon="markdown">
+    Type markdown syntax for instant formatting
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<Warning>
+  The `WysiwygEditor` is great for getting started quickly, but for production applications you'll likely want more control over the editor's behavior and appearance.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Build a Custom Editor" icon="tools" href="/installation">
+    Learn how to create an editor from scratch with exactly the features you need
+  </Card>
+  
+  <Card title="Explore Extensions" icon="puzzle-piece" href="/extensions">
+    Discover all 30+ extensions available in Remirror
+  </Card>
+  
+  <Card title="Learn Core Concepts" icon="book" href="/concepts/extension">
+    Understand how extensions, managers, and state work together
+  </Card>
+  
+  <Card title="Add Custom Toolbars" icon="bars" href="/components/toolbar">
+    Create custom UI components for your editor
+  </Card>
+</CardGroup>
+
+## Congratulations!
+
+You now have a working Remirror editor that can:
+
+- Format text with bold, italic, and other styles
+- Create headings, lists, and other rich content
+- Save and restore content using JSON
+- Respond to keyboard shortcuts and markdown input
+
+Welcome to Remirror!

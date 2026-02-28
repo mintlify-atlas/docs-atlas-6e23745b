@@ -1,0 +1,330 @@
+---
+title: Text Formatting Extensions
+description: Bold, italic, underline, strikethrough, and text styling extensions
+---
+
+Text formatting extensions add inline marks to style text content in your editor.
+
+## BoldExtension
+
+Adds bold text formatting.
+
+### Installation
+
+```typescript
+import { BoldExtension } from 'remirror/extensions';
+
+const extensions = () => [new BoldExtension()];
+```
+
+### Options
+
+<ParamField path="weight" type="number | string">
+  Custom font weight for bold text
+  
+  ```typescript
+  new BoldExtension({ weight: 600 })
+  ```
+</ParamField>
+
+### Commands
+
+#### `toggleBold()`
+
+Toggle bold formatting on the selection.
+
+```typescript
+commands.toggleBold();
+```
+
+#### `setBold(selection?)`
+
+Apply bold formatting to the selection or specified range.
+
+<ParamField path="selection" type="PrimitiveSelection">
+  Optional selection range
+</ParamField>
+
+```typescript
+commands.setBold();
+commands.setBold({ from: 0, to: 10 });
+```
+
+#### `removeBold(selection?)`
+
+Remove bold formatting from selection.
+
+```typescript
+commands.removeBold();
+```
+
+### Keyboard Shortcuts
+
+- `Mod-b` - Toggle bold (Ctrl/Cmd + B)
+
+### Input Rules
+
+Markdown-style input rules:
+- `**text**` - Converts to bold
+- `__text__` - Converts to bold
+
+---
+
+## ItalicExtension
+
+Adds italic text formatting.
+
+### Installation
+
+```typescript
+import { ItalicExtension } from 'remirror/extensions';
+
+const extensions = () => [new ItalicExtension()];
+```
+
+### Commands
+
+#### `toggleItalic(selection?)`
+
+Toggle italic formatting.
+
+```typescript
+commands.toggleItalic();
+```
+
+### Keyboard Shortcuts
+
+- `Mod-i` - Toggle italic (Ctrl/Cmd + I)
+
+### Input Rules
+
+Markdown-style patterns:
+- `*text*` - Converts to italic
+- `_text_` - Converts to italic
+
+### Paste Rules
+
+Automatically converts pasted markdown to italic formatting.
+
+---
+
+## UnderlineExtension
+
+Adds underline text formatting.
+
+### Installation
+
+```typescript
+import { UnderlineExtension } from 'remirror/extensions';
+
+const extensions = () => [new UnderlineExtension()];
+```
+
+### Commands
+
+#### `toggleUnderline(selection?)`
+
+Toggle underline formatting.
+
+```typescript
+commands.toggleUnderline();
+```
+
+### Keyboard Shortcuts
+
+- `Mod-u` - Toggle underline (Ctrl/Cmd + U)
+
+---
+
+## StrikeExtension
+
+Adds strikethrough text formatting.
+
+### Installation
+
+```typescript
+import { StrikeExtension } from 'remirror/extensions';
+
+const extensions = () => [new StrikeExtension()];
+```
+
+### Commands
+
+#### `toggleStrike()`
+
+Toggle strikethrough formatting.
+
+```typescript
+commands.toggleStrike();
+```
+
+### Keyboard Shortcuts
+
+- `Mod-Shift-x` - Toggle strikethrough
+
+### Input Rules
+
+Markdown-style:
+- `~text~` - Converts to strikethrough
+
+---
+
+## TextColorExtension
+
+Adds text color styling.
+
+### Installation
+
+```typescript
+import { TextColorExtension } from 'remirror/extensions';
+
+const extensions = () => [new TextColorExtension()];
+```
+
+### Options
+
+<ParamField path="defaultColor" type="string">
+  Default text color
+  
+  ```typescript
+  new TextColorExtension({ defaultColor: '#000000' })
+  ```
+</ParamField>
+
+<ParamField path="palette" type="string[]">
+  Available color palette
+  
+  ```typescript
+  new TextColorExtension({ 
+    palette: ['#FF0000', '#00FF00', '#0000FF'] 
+  })
+  ```
+</ParamField>
+
+### Commands
+
+#### `setTextColor(color, options?)`
+
+Set text color for the selection.
+
+<ParamField path="color" type="string" required>
+  Color value (hex, rgb, or CSS variable)
+</ParamField>
+
+<ParamField path="options.selection" type="PrimitiveSelection">
+  Optional selection range
+</ParamField>
+
+```typescript
+commands.setTextColor('#FF0000');
+commands.setTextColor('rgb(255, 0, 0)');
+commands.setTextColor('var(--primary-color)');
+```
+
+#### `removeTextColor(options?)`
+
+Remove text color from selection.
+
+```typescript
+commands.removeTextColor();
+```
+
+### Helpers
+
+#### `getHexColor(color)`
+
+Convert color string to hex format.
+
+```typescript
+const hexColor = helpers.getHexColor('rgb(255, 0, 0)');
+// Returns: '#ff0000'
+```
+
+---
+
+## SubExtension & SupExtension
+
+Add subscript and superscript formatting.
+
+### Installation
+
+```typescript
+import { SubExtension, SupExtension } from 'remirror/extensions';
+
+const extensions = () => [
+  new SubExtension(),
+  new SupExtension(),
+];
+```
+
+### Commands
+
+```typescript
+// Subscript
+commands.toggleSub();
+
+// Superscript
+commands.toggleSup();
+```
+
+---
+
+## Combining Formatting
+
+Multiple formatting marks can be applied simultaneously:
+
+```typescript
+// Apply bold and italic together
+commands.toggleBold();
+commands.toggleItalic();
+
+// Apply color to bold text
+commands.toggleBold();
+commands.setTextColor('#FF0000');
+```
+
+## Usage Example
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { 
+  BoldExtension, 
+  ItalicExtension, 
+  UnderlineExtension,
+  StrikeExtension,
+  TextColorExtension 
+} from 'remirror/extensions';
+
+function FormattingEditor() {
+  const { manager, state } = useRemirror({
+    extensions: () => [
+      new BoldExtension(),
+      new ItalicExtension(),
+      new UnderlineExtension(),
+      new StrikeExtension(),
+      new TextColorExtension({
+        palette: ['#FF0000', '#00FF00', '#0000FF'],
+      }),
+    ],
+    content: '<p>Format <strong>this</strong> text!</p>',
+  });
+
+  return (
+    <div>
+      <div>
+        <button onClick={() => manager.commands.toggleBold()}>Bold</button>
+        <button onClick={() => manager.commands.toggleItalic()}>Italic</button>
+        <button onClick={() => manager.commands.toggleUnderline()}>Underline</button>
+        <button onClick={() => manager.commands.toggleStrike()}>Strike</button>
+        <button onClick={() => manager.commands.setTextColor('#FF0000')}>Red</button>
+      </div>
+      <Remirror manager={manager} initialContent={state} />
+    </div>
+  );
+}
+```
+
+## Related
+
+- [Block Elements](/api/extensions/block-elements)
+- [Code Formatting](/api/extensions/code)

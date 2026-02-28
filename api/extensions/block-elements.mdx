@@ -1,0 +1,379 @@
+---
+title: Block Element Extensions
+description: Headings, paragraphs, blockquotes, and structural node extensions
+---
+
+Block element extensions define the structural nodes in your editor's document.
+
+## HeadingExtension
+
+Adds heading nodes (H1-H6) to your editor.
+
+### Installation
+
+```typescript
+import { HeadingExtension } from 'remirror/extensions';
+
+const extensions = () => [new HeadingExtension()];
+```
+
+### Options
+
+<ParamField path="levels" type="number[]" default="[1, 2, 3, 4, 5, 6]">
+  Supported heading levels
+  
+  ```typescript
+  new HeadingExtension({ levels: [1, 2, 3] })
+  ```
+</ParamField>
+
+<ParamField path="defaultLevel" type="number" default="1">
+  Default heading level when toggling
+  
+  ```typescript
+  new HeadingExtension({ defaultLevel: 2 })
+  ```
+</ParamField>
+
+### Commands
+
+#### `toggleHeading(attrs?)`
+
+Toggle heading at the current block.
+
+<ParamField path="attrs.level" type="number">
+  Heading level (1-6)
+</ParamField>
+
+```typescript
+// Toggle to default level
+commands.toggleHeading();
+
+// Toggle to specific level
+commands.toggleHeading({ level: 2 });
+```
+
+### Keyboard Shortcuts
+
+- `Ctrl-Shift-1` - Heading level 1
+- `Ctrl-Shift-2` - Heading level 2
+- `Ctrl-Shift-3` - Heading level 3
+- `Ctrl-Shift-4` - Heading level 4
+- `Ctrl-Shift-5` - Heading level 5
+- `Ctrl-Shift-6` - Heading level 6
+
+### Input Rules
+
+Markdown-style patterns:
+- `# ` - Creates H1
+- `## ` - Creates H2
+- `### ` - Creates H3
+- `#### ` - Creates H4
+- `##### ` - Creates H5
+- `###### ` - Creates H6
+
+### Paste Rules
+
+Automatically converts pasted markdown headings:
+- `# Heading` - Converts to H1
+- `## Heading` - Converts to H2
+
+---
+
+## ParagraphExtension
+
+The fundamental text block node. Required for most editors.
+
+### Installation
+
+```typescript
+import { ParagraphExtension } from 'remirror/extensions';
+
+const extensions = () => [new ParagraphExtension()];
+```
+
+### Commands
+
+#### `convertParagraph(options?)`
+
+Convert current node to a paragraph.
+
+<ParamField path="options.attrs" type="ProsemirrorAttributes">
+  Attributes to apply
+</ParamField>
+
+<ParamField path="options.selection" type="PrimitiveSelection">
+  Selection range
+</ParamField>
+
+<ParamField path="options.preserveAttrs" type="boolean">
+  Preserve existing attributes
+</ParamField>
+
+```typescript
+commands.convertParagraph();
+commands.convertParagraph({ attrs: { class: 'custom' } });
+```
+
+#### `insertParagraph(content, options?)`
+
+Insert a new paragraph with content.
+
+<ParamField path="content" type="string" required>
+  Text content for the paragraph
+</ParamField>
+
+```typescript
+commands.insertParagraph('Hello world');
+commands.insertParagraph('New paragraph', { 
+  selection: { from: 10 } 
+});
+```
+
+### Keyboard Shortcuts
+
+- `Ctrl-Shift-0` - Convert to paragraph
+
+---
+
+## BlockquoteExtension
+
+Adds blockquote (quote block) support.
+
+### Installation
+
+```typescript
+import { BlockquoteExtension } from 'remirror/extensions';
+
+const extensions = () => [new BlockquoteExtension()];
+```
+
+### Commands
+
+#### `toggleBlockquote()`
+
+Toggle blockquote wrapping for the current block.
+
+```typescript
+commands.toggleBlockquote();
+```
+
+### Keyboard Shortcuts
+
+- `Ctrl->` - Toggle blockquote
+
+### Input Rules
+
+Markdown-style:
+- `> ` - Creates blockquote
+
+### Paste Rules
+
+Automatically converts pasted markdown blockquotes:
+- `> Quote text` - Converts to blockquote
+
+---
+
+## HorizontalRuleExtension
+
+Adds horizontal rule dividers.
+
+### Installation
+
+```typescript
+import { HorizontalRuleExtension } from 'remirror/extensions';
+
+const extensions = () => [new HorizontalRuleExtension()];
+```
+
+### Commands
+
+#### `insertHorizontalRule()`
+
+Insert a horizontal rule at the current position.
+
+```typescript
+commands.insertHorizontalRule();
+```
+
+### Input Rules
+
+Markdown-style patterns:
+- `---` - Creates horizontal rule
+- `***` - Creates horizontal rule
+- `___` - Creates horizontal rule
+
+---
+
+## CalloutExtension
+
+Adds info/warning callout boxes.
+
+### Installation
+
+```typescript
+import { CalloutExtension } from 'remirror/extensions';
+
+const extensions = () => [new CalloutExtension()];
+```
+
+### Options
+
+<ParamField path="defaultType" type="'info' | 'warning' | 'error' | 'success'" default="'info'">
+  Default callout type
+</ParamField>
+
+### Commands
+
+#### `toggleCallout(attrs?)`
+
+Toggle callout block.
+
+```typescript
+commands.toggleCallout();
+commands.toggleCallout({ type: 'warning' });
+commands.toggleCallout({ type: 'error', emoji: '🚨' });
+```
+
+---
+
+## DocExtension
+
+Defines the root document node. Required for all editors.
+
+### Installation
+
+```typescript
+import { DocExtension } from 'remirror/extensions';
+
+const extensions = () => [new DocExtension()];
+```
+
+This extension is typically included automatically by presets.
+
+---
+
+## TextExtension
+
+Defines the text node. Required for all editors.
+
+### Installation
+
+```typescript
+import { TextExtension } from 'remirror/extensions';
+
+const extensions = () => [new TextExtension()];
+```
+
+This extension is typically included automatically by presets.
+
+---
+
+## HardBreakExtension
+
+Adds hard line breaks (Shift+Enter).
+
+### Installation
+
+```typescript
+import { HardBreakExtension } from 'remirror/extensions';
+
+const extensions = () => [new HardBreakExtension()];
+```
+
+### Commands
+
+#### `insertHardBreak()`
+
+Insert a hard line break.
+
+```typescript
+commands.insertHardBreak();
+```
+
+### Keyboard Shortcuts
+
+- `Shift-Enter` - Insert hard break
+- `Ctrl-Enter` - Insert hard break
+
+---
+
+## Usage Example
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import {
+  DocExtension,
+  TextExtension,
+  ParagraphExtension,
+  HeadingExtension,
+  BlockquoteExtension,
+  HorizontalRuleExtension,
+  HardBreakExtension,
+} from 'remirror/extensions';
+
+function BlockEditor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new DocExtension(),
+      new TextExtension(),
+      new ParagraphExtension(),
+      new HeadingExtension({ levels: [1, 2, 3] }),
+      new BlockquoteExtension(),
+      new HorizontalRuleExtension(),
+      new HardBreakExtension(),
+    ],
+  });
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button onClick={() => manager.commands.toggleHeading({ level: 1 })}>
+          H1
+        </button>
+        <button onClick={() => manager.commands.toggleHeading({ level: 2 })}>
+          H2
+        </button>
+        <button onClick={() => manager.commands.toggleBlockquote()}>
+          Quote
+        </button>
+        <button onClick={() => manager.commands.insertHorizontalRule()}>
+          HR
+        </button>
+      </div>
+      <Remirror manager={manager} />
+    </div>
+  );
+}
+```
+
+## Schema Structure
+
+```typescript
+// Document structure
+doc {
+  block+ // One or more blocks
+}
+
+heading(level: 1-6) {
+  inline* // Inline content
+}
+
+paragraph {
+  inline* // Inline content
+}
+
+blockquote {
+  block+ // Nested blocks
+}
+
+horizontalRule // Empty node
+
+hardBreak // Empty node
+```
+
+## Related
+
+- [Text Formatting](/api/extensions/text-formatting)
+- [Lists](/api/extensions/lists)
+- [Tables](/api/extensions/tables)

@@ -1,0 +1,675 @@
+---
+title: Extension Base Classes
+description: Complete API reference for Extension, NodeExtension, MarkExtension, and PlainExtension base classes.
+---
+
+# Extension Base Classes
+
+Extensions are the fundamental building blocks of Remirror. They define editor behavior, schema, commands, and helpers. There are three types of extensions based on what they add to the editor.
+
+## Extension Types
+
+<CardGroup cols={3}>
+  <Card title="NodeExtension" icon="cube">
+    Creates ProseMirror nodes (blocks like paragraphs, headings)
+  </Card>
+  
+  <Card title="MarkExtension" icon="highlighter">
+    Creates ProseMirror marks (inline formatting like bold, italic)
+  </Card>
+  
+  <Card title="PlainExtension" icon="puzzle-piece">
+    Adds behavior without schema changes (keymaps, plugins)
+  </Card>
+</CardGroup>
+
+## PlainExtension
+
+Create custom behavior without directly mapping to schema nodes or marks.
+
+```typescript
+abstract class PlainExtension<Options extends ValidOptions = EmptyShape>
+  extends Extension<Options>
+```
+
+### Creating a Plain Extension
+
+<CodeGroup>
+```typescript Basic Extension
+import { PlainExtension, Static } from 'remirror';
+
+interface AwesomeOptions {
+  isAwesome?: Static<boolean>;
+  priority?: number;
+}
+
+class AwesomeExtension extends PlainExtension<AwesomeOptions> {
+  static defaultOptions: DefaultExtensionOptions<AwesomeOptions> = {
+    isAwesome: true,
+    priority: undefined,
+  };
+
+  get name() {
+    return 'awesome' as const;
+  }
+
+  onCreate(): void {
+    console.log('Extension created!');
+  }
+}
+```
+
+```typescript With Commands
+import { command, CommandFunction } from 'remirror';
+
+class CustomExtension extends PlainExtension {
+  get name() {
+    return 'custom' as const;
+  }
+
+  @command()
+  doSomething(): CommandFunction {
+    return ({ tr, dispatch }) => {
+      if (dispatch) {
+        tr.insertText('Custom command executed!');
+        dispatch(tr);
+      }
+      return true;
+    };
+  }
+}
+```
+
+```typescript With Helpers
+import { helper, Helper } from 'remirror';
+
+class UtilityExtension extends PlainExtension {
+  get name() {
+    return 'utility' as const;
+  }
+
+  @helper()
+  getDocumentLength(): Helper<number> {
+    return this.store.getState().doc.nodeSize;
+  }
+}
+```
+</CodeGroup>
+
+## NodeExtension
+
+Create custom block-level or structural nodes in the editor.
+
+```typescript
+abstract class NodeExtension<Options extends ValidOptions = EmptyShape>
+  extends Extension<Options>
+```
+
+### Required Method
+
+#### createNodeSpec()
+
+Define the ProseMirror NodeSpec for this node.
+
+```typescript
+abstract createNodeSpec(
+  extra: ApplySchemaAttributes,
+  override: NodeSpecOverride
+): NodeExtensionSpec
+```
+
+<ParamField path="extra" type="ApplySchemaAttributes" required>
+  Function to apply extra attributes to the node
+</ParamField>
+
+<ParamField path="override" type="NodeSpecOverride" required>
+  Schema overrides from other extensions
+</ParamField>
+
+### Properties
+
+#### type
+
+Access the ProseMirror NodeType for this extension.
+
+```typescript
+get type(): NodeType
+```
+
+<Info>
+The `type` property is available after the schema is created (during and after the `onCreate` lifecycle).
+</Info>
+
+### Example: Custom Node Extension
+
+<CodeGroup>
+```typescript Callout Node
+import { NodeExtension, command, CommandFunction } from 'remirror';
+import type { NodeExtensionSpec } from 'remirror';
+
+interface CalloutOptions {
+  defaultType?: 'info' | 'warning' | 'error';
+}
+
+class CalloutExtension extends NodeExtension<CalloutOptions> {
+  static defaultOptions: DefaultExtensionOptions<CalloutOptions> = {
+    defaultType: 'info',
+  };
+
+  get name() {
+    return 'callout' as const;
+  }
+
+  createNodeSpec(
+    extra: ApplySchemaAttributes,
+    override: NodeSpecOverride
+  ): NodeExtensionSpec {
+    return {
+      attrs: {
+        ...extra.defaults(),
+        type: { default: this.options.defaultType },
+      },
+      content: 'block+',
+      defining: true,
+      draggable: false,
+      parseDOM: [
+        {
+          tag: 'div[data-callout-type]',
+          getAttrs: (node) => ({
+            ...extra.parse(node),
+            type: (node as HTMLElement).getAttribute('data-callout-type'),
+          }),
+        },
+      ],
+      toDOM: (node) => {
+        return [
+          'div',
+          {
+            ...extra.dom(node),
+            'data-callout-type': node.attrs.type,
+            class: `callout callout-${node.attrs.type}`,
+          },
+          0,
+        ];
+      },
+    };
+  }
+
+  @command()
+  insertCallout(type?: 'info' | 'warning' | 'error'): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const node = this.type.create({ type: type ?? this.options.defaultType });
+      if (dispatch) {
+        tr.replaceSelectionWith(node);
+        dispatch(tr);
+      }
+      return true;
+    };
+  }
+}
+```
+
+```typescript Panel Node
+class PanelExtension extends NodeExtension {
+  get name() {
+    return 'panel' as const;
+  }
+
+  createNodeSpec(extra: ApplySchemaAttributes): NodeExtensionSpec {
+    return {
+      attrs: extra.defaults(),
+      content: 'block+',
+      group: 'block',
+      parseDOM: [
+        {
+          tag: 'div.panel',
+          getAttrs: extra.parse,
+        },
+      ],
+      toDOM: (node) => ['div', { ...extra.dom(node), class: 'panel' }, 0],
+    };
+  }
+}
+```
+</CodeGroup>
+
+## MarkExtension
+
+Create inline formatting marks like bold, italic, or custom styles.
+
+```typescript
+abstract class MarkExtension<Options extends ValidOptions = EmptyShape>
+  extends Extension<Options>
+```
+
+### Required Method
+
+#### createMarkSpec()
+
+Define the ProseMirror MarkSpec for this mark.
+
+```typescript
+abstract createMarkSpec(
+  extra: ApplySchemaAttributes,
+  override: MarkSpecOverride
+): MarkExtensionSpec
+```
+
+### Properties
+
+#### type
+
+Access the ProseMirror MarkType for this extension.
+
+```typescript
+get type(): MarkType
+```
+
+### Example: Custom Mark Extension
+
+<CodeGroup>
+```typescript Highlight Mark
+import { MarkExtension, command, CommandFunction } from 'remirror';
+import { toggleMark } from 'remirror/commands';
+
+interface HighlightOptions {
+  defaultColor?: string;
+}
+
+class HighlightExtension extends MarkExtension<HighlightOptions> {
+  static defaultOptions: DefaultExtensionOptions<HighlightOptions> = {
+    defaultColor: 'yellow',
+  };
+
+  get name() {
+    return 'highlight' as const;
+  }
+
+  createMarkSpec(
+    extra: ApplySchemaAttributes,
+    override: MarkSpecOverride
+  ): MarkExtensionSpec {
+    return {
+      attrs: {
+        ...extra.defaults(),
+        color: { default: this.options.defaultColor },
+      },
+      parseDOM: [
+        {
+          tag: 'mark',
+          getAttrs: (node) => ({
+            ...extra.parse(node),
+            color: (node as HTMLElement).style.backgroundColor,
+          }),
+        },
+      ],
+      toDOM: (mark) => [
+        'mark',
+        {
+          ...extra.dom(mark),
+          style: `background-color: ${mark.attrs.color}`,
+        },
+      ],
+    };
+  }
+
+  @command()
+  toggleHighlight(color?: string): CommandFunction {
+    return toggleMark({
+      type: this.type,
+      attrs: { color: color ?? this.options.defaultColor },
+    });
+  }
+
+  @command()
+  setHighlightColor(color: string): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const { from, to } = tr.selection;
+      if (dispatch) {
+        tr.addMark(from, to, this.type.create({ color }));
+        dispatch(tr);
+      }
+      return true;
+    };
+  }
+}
+```
+
+```typescript Color Mark
+class ColorExtension extends MarkExtension {
+  get name() {
+    return 'color' as const;
+  }
+
+  createMarkSpec(extra: ApplySchemaAttributes): MarkExtensionSpec {
+    return {
+      attrs: {
+        ...extra.defaults(),
+        color: { default: 'black' },
+      },
+      parseDOM: [
+        {
+          style: 'color',
+          getAttrs: (value) => ({
+            color: value,
+          }),
+        },
+      ],
+      toDOM: (mark) => [
+        'span',
+        {
+          ...extra.dom(mark),
+          style: `color: ${mark.attrs.color}`,
+        },
+      ],
+    };
+  }
+}
+```
+</CodeGroup>
+
+## Common Extension Features
+
+### Options System
+
+Extensions can define typed options with static and dynamic values.
+
+<CodeGroup>
+```typescript Option Types
+import { Static, Dynamic, Handler, CustomHandler } from 'remirror';
+
+interface MyExtensionOptions {
+  // Static: Set at instantiation, never changes
+  maxLength?: Static<number>;
+  
+  // Dynamic: Can be updated at runtime
+  enabled?: Dynamic<boolean>;
+  
+  // Handler: Event callback that can be added/removed
+  onChange?: Handler<(text: string) => void>;
+  
+  // Custom: Advanced handler with dispose logic
+  onCustomEvent?: CustomHandler<() => void>;
+}
+```
+
+```typescript Default Options
+class MyExtension extends PlainExtension<MyExtensionOptions> {
+  static defaultOptions: DefaultExtensionOptions<MyExtensionOptions> = {
+    maxLength: 1000,
+    enabled: true,
+    // Handlers/CustomHandlers don't need defaults
+  };
+  
+  // Access options
+  doSomething() {
+    if (this.options.enabled) {
+      console.log('Max length:', this.options.maxLength);
+    }
+  }
+}
+```
+
+```typescript Runtime Updates
+// Update dynamic options
+extension.setOptions({ enabled: false });
+
+// Reset to defaults
+extension.resetOptions();
+
+// Add handler
+const dispose = extension.addHandler('onChange', (text) => {
+  console.log('Changed:', text);
+});
+
+// Remove handler later
+dispose();
+```
+</CodeGroup>
+
+### Lifecycle Methods
+
+Extensions have several lifecycle hooks:
+
+<Tabs>
+  <Tab title="onCreate">
+    Called when the manager is created, before the view exists.
+    
+    ```typescript
+    onCreate?(): Dispose | void
+    ```
+    
+    <CodeGroup>
+    ```typescript Example
+    class MyExtension extends PlainExtension {
+      onCreate(): void {
+        console.log('Schema:', this.store.schema);
+        console.log('Extensions:', this.store.extensions);
+      }
+    }
+    ```
+    
+    ```typescript With Cleanup
+    onCreate(): Dispose {
+      const interval = setInterval(() => {
+        console.log('Tick');
+      }, 1000);
+      
+      // Return cleanup function
+      return () => clearInterval(interval);
+    }
+    ```
+    </CodeGroup>
+  </Tab>
+  
+  <Tab title="onView">
+    Called when the EditorView is attached.
+    
+    ```typescript
+    onView?(view: EditorView): Dispose | void
+    ```
+    
+    ```typescript
+    onView(view: EditorView): void {
+      console.log('View attached:', view);
+      console.log('Can now dispatch transactions');
+    }
+    ```
+  </Tab>
+  
+  <Tab title="onStateUpdate">
+    Called after every state update.
+    
+    ```typescript
+    onStateUpdate?(props: StateUpdateLifecycleProps): void
+    ```
+    
+    ```typescript
+    onStateUpdate({ state, previousState, tr, firstUpdate }): void {
+      if (firstUpdate) {
+        console.log('First update!');
+      }
+      
+      if (tr?.docChanged) {
+        console.log('Document changed');
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="onDestroy">
+    Called when the extension is destroyed.
+    
+    ```typescript
+    onDestroy?(): void
+    ```
+    
+    ```typescript
+    onDestroy(): void {
+      console.log('Cleaning up resources');
+      this.cleanup();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Properties
+
+#### name
+
+Unique identifier for the extension (required).
+
+```typescript
+abstract get name(): string
+```
+
+<Warning>
+The name must be unique within the editor and should be a string literal for proper type inference.
+</Warning>
+
+#### priority
+
+Execution priority for this extension.
+
+```typescript
+get priority(): ExtensionPriority
+```
+
+#### store
+
+Shared extension store with editor state and utilities.
+
+```typescript
+protected get store(): Remirror.ExtensionStore
+```
+
+<ResponseField name="store" type="Remirror.ExtensionStore">
+  <ResponseField name="view" type="EditorView">
+    ProseMirror view instance
+  </ResponseField>
+  
+  <ResponseField name="schema" type="EditorSchema">
+    Generated schema
+  </ResponseField>
+  
+  <ResponseField name="currentState" type="EditorState">
+    Current editor state
+  </ResponseField>
+  
+  <ResponseField name="previousState" type="EditorState | undefined">
+    Previous editor state
+  </ResponseField>
+  
+  <ResponseField name="getState" type="() => EditorState">
+    Get current state
+  </ResponseField>
+  
+  <ResponseField name="getExtension" type="<T>(Constructor: T) => InstanceType<T>">
+    Get another extension instance
+  </ResponseField>
+</ResponseField>
+
+#### options
+
+Current option values for this extension.
+
+```typescript
+get options(): RemoveAnnotations<GetFixed<Options> & DefaultStaticOptions>
+```
+
+### Methods
+
+#### clone()
+
+Create a copy of the extension with new options.
+
+```typescript
+clone(...args: ExtensionConstructorProps<Options>): Extension<Options>
+```
+
+#### getExtension()
+
+Get a child extension from this holder extension.
+
+```typescript
+getExtension<Type extends this['~E']['constructor']>(
+  Constructor: Type
+): InstanceType<Type>
+```
+
+#### setOptions()
+
+Update dynamic options at runtime.
+
+```typescript
+setOptions(update: GetPartialDynamic<Options>): void
+```
+
+#### resetOptions()
+
+Reset options to their initial values.
+
+```typescript
+resetOptions(): void
+```
+
+## Type Utilities
+
+### Type Guards
+
+<CodeGroup>
+```typescript isExtension
+import { isExtension } from 'remirror';
+
+if (isExtension(value)) {
+  // value is an Extension
+  console.log(value.name);
+}
+```
+
+```typescript isNodeExtension
+import { isNodeExtension } from 'remirror';
+
+if (isNodeExtension(extension)) {
+  // extension is a NodeExtension
+  console.log(extension.type);
+}
+```
+
+```typescript isMarkExtension
+import { isMarkExtension } from 'remirror';
+
+if (isMarkExtension(extension)) {
+  // extension is a MarkExtension
+  console.log(extension.type);
+}
+```
+
+```typescript isPlainExtension
+import { isPlainExtension } from 'remirror';
+
+if (isPlainExtension(extension)) {
+  // extension is a PlainExtension
+}
+```
+</CodeGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="RemirrorManager" icon="gears" href="/api/core/manager">
+    Learn about the manager that orchestrates extensions
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/api/core/commands">
+    Create commands in your extensions
+  </Card>
+  
+  <Card title="Helpers" icon="wand-magic-sparkles" href="/api/core/helpers">
+    Add helper methods to extensions
+  </Card>
+  
+  <Card title="Extension Tutorial" icon="book" href="/guides/custom-extensions">
+    Step-by-step extension creation guide
+  </Card>
+</CardGroup>

@@ -1,0 +1,413 @@
+---
+title: Remirror Component
+description: The main Remirror React component that provides the editor context and rendering
+---
+
+# Remirror Component
+
+The `<Remirror />` component is the main component for creating rich text editors. It acts as a provider of the Remirror context and manages the editor lifecycle.
+
+## Basic Usage
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  return <Remirror manager={manager} />;
+};
+```
+
+## Props
+
+<ParamField path="manager" type="RemirrorManager" required>
+  The manager that composes extensions and provides editor functionality. Create using `useRemirror` or `useManager`.
+</ParamField>
+
+<ParamField path="children" type="ReactNode" optional>
+  Optional child components that will have access to the Remirror context via hooks like `useRemirrorContext()`
+</ParamField>
+
+<ParamField path="autoRender" type="boolean | 'start' | 'end'" optional>
+  Controls automatic rendering of the editor to the DOM
+  
+  - `'start'` - Renders editor before all child components (recommended)
+  - `'end'` - Renders editor after all child components
+  - `true` - Same as `'start'`
+  - `false` or `undefined` - No automatic rendering (must use `EditorComponent` or custom component)
+  
+  When no children are provided, the editor renders automatically even without this prop.
+</ParamField>
+
+<ParamField path="initialContent" type="string | RemirrorJSON | ProsemirrorNode" optional>
+  The initial content for the editor
+</ParamField>
+
+<ParamField path="editable" type="boolean" optional default="true">
+  Whether the editor is editable
+</ParamField>
+
+<ParamField path="placeholder" type="string" optional>
+  Placeholder text to show when editor is empty (requires PlaceholderExtension)
+</ParamField>
+
+<ParamField path="onChange" type="RemirrorEventListener" optional>
+  Callback fired when the editor state changes
+</ParamField>
+
+<ParamField path="onBlur" type="(params: BlurParams) => void" optional>
+  Callback fired when the editor loses focus
+</ParamField>
+
+<ParamField path="onFocus" type="(params: FocusParams) => void" optional>
+  Callback fired when the editor gains focus
+</ParamField>
+
+<ParamField path="state" type="EditorState" optional>
+  Pass an EditorState to make the editor controlled. Must use with `onChange`.
+</ParamField>
+
+<ParamField path="hooks" type="Array<() => void>" optional>
+  Array of hooks called in order within the Remirror context. Useful for running side effects.
+</ParamField>
+
+<ParamField path="i18nFormat" type="I18nFormatter" optional>
+  Provide a function that formats ICU MessageFormat encoded messages via your i18n solution
+</ParamField>
+
+<ParamField path="locale" type="string" optional default="'en'">
+  The current locale for the editor
+</ParamField>
+
+<ParamField path="supportedLocales" type="string[]" optional>
+  Array of supported locales. Defaults to `[locale]`
+</ParamField>
+
+## Rendering Patterns
+
+### Auto-render at Start (Recommended)
+
+```tsx
+import { Remirror } from '@remirror/react';
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager} autoRender="start">
+      <Toolbar />
+      <FloatingMenu />
+    </Remirror>
+  );
+};
+```
+
+<Info>
+  Using `autoRender="start"` helps avoid z-index issues with floating components.
+</Info>
+
+### Auto-render at End
+
+```tsx
+import { Remirror } from '@remirror/react';
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager} autoRender="end">
+      <Toolbar />
+      <CharacterCount />
+    </Remirror>
+  );
+};
+```
+
+### Custom Rendering with EditorComponent
+
+```tsx
+import { Remirror, EditorComponent } from '@remirror/react';
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager}>
+      <Toolbar />
+      <EditorComponent />
+      <StatusBar />
+    </Remirror>
+  );
+};
+```
+
+### Custom Rendering with getRootProps
+
+```tsx
+import { Remirror, useRemirrorContext } from '@remirror/react';
+
+const CustomEditor = () => {
+  const { getRootProps } = useRemirrorContext();
+
+  return (
+    <div className="custom-editor">
+      <div {...getRootProps()} className="editor-content" />
+    </div>
+  );
+};
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager}>
+      <CustomEditor />
+    </Remirror>
+  );
+};
+```
+
+<Warning>
+  When using `getRootProps()`, spread it on a component with NO children to support SSR pre-rendering.
+</Warning>
+
+## State Management
+
+### Uncontrolled Editor (Default)
+
+```tsx
+import { Remirror } from '@remirror/react';
+
+const Editor = () => {
+  const handleChange = useCallback(({ state, tr }) => {
+    console.log('Editor changed:', state);
+  }, []);
+
+  return (
+    <Remirror 
+      manager={manager} 
+      onChange={handleChange}
+      initialContent="<p>Initial content</p>"
+    />
+  );
+};
+```
+
+### Controlled Editor
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { useState } from 'react';
+
+const Editor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+    content: '<p>Initial content</p>',
+  });
+
+  const handleChange = useCallback(({ state }) => {
+    setState(state);
+  }, [setState]);
+
+  return (
+    <Remirror 
+      manager={manager}
+      state={state}
+      onChange={handleChange}
+    />
+  );
+};
+```
+
+## Context Access
+
+All components rendered within `<Remirror />` have access to the editor context:
+
+```tsx
+import { Remirror, useRemirrorContext } from '@remirror/react';
+
+const BoldButton = () => {
+  const { commands, active } = useRemirrorContext();
+
+  return (
+    <button 
+      onClick={() => commands.toggleBold()}
+      className={active.bold() ? 'active' : ''}
+    >
+      Bold
+    </button>
+  );
+};
+
+const Editor = () => {
+  return (
+    <Remirror manager={manager}>
+      <BoldButton />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+## Internationalization
+
+```tsx
+import { Remirror } from '@remirror/react';
+import { i18nFormat } from '@remirror/i18n';
+
+const Editor = () => {
+  return (
+    <Remirror 
+      manager={manager}
+      i18nFormat={i18nFormat}
+      locale="es"
+      supportedLocales={['en', 'es', 'fr']}
+    >
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+## Using Hooks
+
+The `hooks` prop allows you to run side effects within the Remirror context:
+
+```tsx
+import { Remirror } from '@remirror/react';
+
+const useEditorLogger = () => {
+  const { getState } = useRemirrorContext();
+  
+  useEffect(() => {
+    console.log('Editor initialized:', getState());
+  }, []);
+};
+
+const Editor = () => {
+  return (
+    <Remirror 
+      manager={manager}
+      hooks={[useEditorLogger]}
+    >
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+## Error Handling
+
+Handle invalid content with the `onError` prop:
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { useCallback } from 'react';
+
+const Editor = () => {
+  const onError = useCallback(({ json, invalidContent, transformers }) => {
+    // Automatically remove all invalid nodes and marks
+    return transformers.remove(json, invalidContent);
+  }, []);
+
+  const { manager } = useRemirror({
+    extensions: () => [new BoldExtension()],
+    onError,
+  });
+
+  return <Remirror manager={manager} />;
+};
+```
+
+## Complete Example
+
+```tsx
+import { 
+  Remirror, 
+  EditorComponent,
+  OnChangeJSON,
+  useRemirror,
+  useCommands,
+  useActive
+} from '@remirror/react';
+import { 
+  BoldExtension, 
+  ItalicExtension,
+  UnderlineExtension
+} from 'remirror/extensions';
+import { useCallback, useState } from 'react';
+
+const Toolbar = () => {
+  const commands = useCommands();
+  const active = useActive();
+
+  return (
+    <div className="toolbar">
+      <button 
+        onClick={() => commands.toggleBold()}
+        className={active.bold() ? 'active' : ''}
+      >
+        Bold
+      </button>
+      <button 
+        onClick={() => commands.toggleItalic()}
+        className={active.italic() ? 'active' : ''}
+      >
+        Italic
+      </button>
+      <button 
+        onClick={() => commands.toggleUnderline()}
+        className={active.underline() ? 'active' : ''}
+      >
+        Underline
+      </button>
+    </div>
+  );
+};
+
+const Editor = () => {
+  const [json, setJson] = useState(null);
+
+  const { manager } = useRemirror({
+    extensions: () => [
+      new BoldExtension(),
+      new ItalicExtension(),
+      new UnderlineExtension(),
+    ],
+    content: '<p>Start typing...</p>',
+    stringHandler: 'html',
+  });
+
+  const handleSave = useCallback(() => {
+    console.log('Saving:', json);
+    // Save to backend
+  }, [json]);
+
+  return (
+    <div className="editor-wrapper">
+      <Remirror manager={manager} autoRender="start">
+        <OnChangeJSON onChange={setJson} />
+        <Toolbar />
+      </Remirror>
+      
+      <button onClick={handleSave}>Save</button>
+    </div>
+  );
+};
+
+export default Editor;
+```
+
+## Best Practices
+
+<Tip>
+  **Use `autoRender="start"`** for most use cases to avoid z-index issues with floating menus and toolbars.
+</Tip>
+
+<Tip>
+  **Memoize callbacks** passed to `onChange`, `onFocus`, and `onBlur` to prevent unnecessary re-renders.
+</Tip>
+
+<Tip>
+  **Keep manager stable** - Create the manager once and reuse it. Don't recreate it on every render.
+</Tip>
+
+<Warning>
+  **Don't mix controlled and uncontrolled** - Either use `state` + `onChange` together (controlled) or use neither (uncontrolled). Don't mix the patterns.
+</Warning>

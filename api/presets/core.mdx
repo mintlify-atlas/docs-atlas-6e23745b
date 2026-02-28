@@ -1,0 +1,262 @@
+---
+title: 'Core Preset'
+description: 'Essential extensions for every Remirror editor including history, document structure, and positioning'
+---
+
+## Overview
+
+The `corePreset` is the foundation of every Remirror editor. It provides essential extensions for document structure, text editing, history management, and cursor positioning. This preset is automatically included when creating an editor with `@remirror/react`.
+
+## Installation
+
+```bash
+npm install @remirror/preset-core
+```
+
+## Usage
+
+<CodeGroup>
+```typescript Basic Usage
+import { corePreset } from '@remirror/preset-core';
+import { RemirrorManager } from '@remirror/core';
+
+// Create manager with core preset
+const manager = RemirrorManager.create(() => [
+  ...corePreset(),
+  // your other extensions
+]);
+```
+
+```typescript With Options
+import { corePreset } from '@remirror/preset-core';
+
+const extensions = corePreset({
+  // History options
+  depth: 100,
+  newGroupDelay: 500,
+  
+  // Doc options
+  content: 'block+',
+  
+  // Exclude specific extensions
+  excludeExtensions: ['history'],
+});
+```
+
+```typescript Using Helper
+import { createCoreManager } from '@remirror/preset-core';
+import { BoldExtension } from '@remirror/extension-bold';
+
+// Automatically applies core preset
+const manager = createCoreManager(
+  [new BoldExtension()],
+  {
+    core: {
+      excludeExtensions: ['history'],
+    },
+  }
+);
+```
+</CodeGroup>
+
+## Included Extensions
+
+The core preset includes the following extensions:
+
+### HistoryExtension
+
+Provides undo and redo functionality with configurable history depth.
+
+**Features:**
+- Undo/redo commands
+- Configurable history depth
+- Group delay for batching changes
+
+### DocExtension
+
+Provides the top-level ProseMirror document node.
+
+**Features:**
+- Root document structure
+- Configurable content model
+
+### TextExtension
+
+Provides the ProseMirror text node for inline text content.
+
+### ParagraphExtension
+
+Provides the paragraph block node for text content.
+
+### PositionerExtension
+
+Sets up automatic position checking and creation of virtual nodes from any part of the editor.
+
+**Features:**
+- Position tracking
+- Virtual node creation
+- Automatic position updates
+
+### GapCursorExtension
+
+Enables cursor placement in positions where regular selection isn't possible.
+
+**Features:**
+- Cursor in empty nodes
+- Cursor between nodes
+- Better navigation
+
+### EventsExtension
+
+Provides event handling capabilities for editor interactions.
+
+## Options
+
+<ParamField path="excludeExtensions" type="string[]" default="[]">
+  Exclude specific extensions from the preset by passing their extension names.
+  
+  <Note>
+    When using the `yjs` extension for collaborative editing, it's important to exclude the history extension to prevent conflicts:
+    
+    ```typescript
+    corePreset({ excludeExtensions: ['history'] })
+    ```
+  </Note>
+  
+  **Available extension names:**
+  - `'history'` - HistoryExtension
+  - `'doc'` - DocExtension
+  - `'text'` - TextExtension
+  - `'paragraph'` - ParagraphExtension
+  - `'positioner'` - PositionerExtension
+  - `'gapCursor'` - GapCursorExtension
+  - `'events'` - EventsExtension
+</ParamField>
+
+### History Options
+
+<ParamField path="depth" type="number">
+  The amount of history events that are collected before the oldest events are discarded.
+</ParamField>
+
+<ParamField path="newGroupDelay" type="number">
+  The delay in milliseconds between changes after which a new group should be started. Defaults to 500ms.
+</ParamField>
+
+<ParamField path="getDispatch" type="(state: EditorState) => (tr: Transaction) => void">
+  Custom dispatch function for transactions.
+</ParamField>
+
+<ParamField path="getState" type="() => EditorState">
+  Custom state getter function.
+</ParamField>
+
+### Doc Options
+
+<ParamField path="content" type="string">
+  The content expression for the document node. Defines what type of content the document can contain.
+  
+  **Examples:**
+  - `'block+'` - One or more block nodes (default)
+  - `'block*'` - Zero or more block nodes
+  - `'paragraph+'` - One or more paragraphs
+</ParamField>
+
+## API Reference
+
+### corePreset()
+
+Creates an array of core extensions with optional configuration.
+
+**Signature:**
+```typescript
+function corePreset(
+  options?: GetStaticAndDynamic<CorePresetOptions>
+): CorePreset[];
+```
+
+**Returns:** Array of extension instances
+
+### createCoreManager()
+
+Creates a RemirrorManager with the core preset automatically applied.
+
+**Signature:**
+```typescript
+function createCoreManager<Extension extends AnyExtension>(
+  extensions: Extension[] | (() => Extension[]),
+  options?: CreateCoreManagerOptions
+): RemirrorManager<Extension | CorePreset | BuiltinPreset>;
+```
+
+**Parameters:**
+- `extensions` - Array or lazy array of additional extensions
+- `options.core` - Core preset options
+- `options` - Manager settings
+
+**Returns:** Configured RemirrorManager instance
+
+## Examples
+
+### Excluding History for Collaboration
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+import { YjsExtension } from '@remirror/extension-yjs';
+
+const extensions = [
+  ...corePreset({
+    excludeExtensions: ['history'],
+  }),
+  new YjsExtension(),
+];
+```
+
+### Custom History Configuration
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+
+const extensions = corePreset({
+  depth: 200,           // Store more history
+  newGroupDelay: 1000,  // Longer delay between groups
+});
+```
+
+### Custom Document Content Model
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+
+const extensions = corePreset({
+  content: 'heading paragraph+', // Must start with heading
+});
+```
+
+## TypeScript
+
+### CorePresetOptions
+
+```typescript
+interface CorePresetOptions 
+  extends DocOptions, 
+          PositionerOptions, 
+          HistoryOptions {
+  excludeExtensions?: Static<ExcludeExtensionKey[]>;
+}
+```
+
+### CorePreset
+
+Union type of all extensions provided by the preset:
+
+```typescript
+type CorePreset =
+  | HistoryExtension
+  | GapCursorExtension
+  | DocExtension
+  | TextExtension
+  | ParagraphExtension
+  | PositionerExtension
+  | EventsExtension;
+```

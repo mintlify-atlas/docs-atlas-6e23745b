@@ -1,0 +1,279 @@
+---
+title: 'Formatting Preset'
+description: 'Text formatting extensions including text color, highlights, font size, and alignment'
+---
+
+## Overview
+
+The `formattingPreset` provides a comprehensive collection of text and node formatting extensions. It includes advanced formatting capabilities like text color, highlights, font size, subscript, superscript, text case transformation, and column layouts.
+
+<Note>
+  This preset focuses on rich text formatting features beyond basic marks. For basic formatting like bold, italic, and underline, see the [WYSIWYG Preset](/api/presets/wysiwyg).
+</Note>
+
+## Installation
+
+```bash
+npm install @remirror/preset-formatting
+```
+
+## Usage
+
+<CodeGroup>
+```typescript Basic Usage
+import { formattingPreset } from '@remirror/preset-formatting';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create(() => [
+  ...formattingPreset(),
+  // your other extensions
+]);
+```
+
+```typescript With Core Preset
+import { corePreset } from '@remirror/preset-core';
+import { formattingPreset } from '@remirror/preset-formatting';
+
+const extensions = [
+  ...corePreset(),
+  ...formattingPreset(),
+];
+```
+</CodeGroup>
+
+## Included Extensions
+
+The formatting preset includes the following extensions:
+
+### Text Mark Extensions
+
+#### BoldExtension
+
+Applies bold formatting to selected text.
+
+**Features:**
+- Bold text mark
+- Keyboard shortcuts (Mod-b)
+- Configurable font weight
+
+#### ItalicExtension
+
+Applies italic formatting to selected text.
+
+**Features:**
+- Italic text mark
+- Keyboard shortcuts (Mod-i)
+
+#### UnderlineExtension
+
+Applies underline formatting to selected text.
+
+**Features:**
+- Underline text mark
+- Keyboard shortcuts (Mod-u)
+
+#### StrikeExtension
+
+Applies strikethrough formatting to selected text.
+
+**Features:**
+- Strikethrough text mark
+- Keyboard shortcuts
+
+#### SubscriptExtension (SubExtension)
+
+Applies subscript formatting to selected text.
+
+**Features:**
+- Subscript text mark
+- Chemistry formulas: H₂O
+- Mathematical notation
+
+#### SuperscriptExtension (SupExtension)
+
+Applies superscript formatting to selected text.
+
+**Features:**
+- Superscript text mark
+- Exponents: x²
+- Ordinal indicators: 1st, 2nd
+
+### Text Color Extensions
+
+#### TextColorExtension
+
+Applies custom colors to text.
+
+**Features:**
+- Custom text colors
+- Hex, RGB, and named colors
+- Color picker integration
+
+#### TextHighlightExtension
+
+Applies background highlight colors to text.
+
+**Features:**
+- Text highlighting
+- Multiple highlight colors
+- Marker-style annotations
+
+### Text Transformation
+
+#### TextCaseExtension
+
+Transforms text case (uppercase, lowercase, title case).
+
+**Features:**
+- UPPERCASE transformation
+- lowercase transformation
+- Title Case transformation
+- Commands for each case type
+
+#### FontSizeExtension
+
+Applies custom font sizes to text.
+
+**Features:**
+- Custom font sizes
+- Pixel, em, rem units
+- Size increase/decrease commands
+
+### Node Extensions
+
+#### HeadingExtension
+
+Provides heading nodes (h1-h6).
+
+**Features:**
+- Six heading levels
+- Keyboard shortcuts
+- Configurable levels
+
+#### NodeFormattingExtension
+
+Applies formatting to block nodes (alignment, indentation).
+
+**Features:**
+- Text alignment (left, center, right, justify)
+- Indentation control
+- Line height
+- Node-level styling
+
+#### ColumnsExtension
+
+Creates multi-column layouts.
+
+**Features:**
+- Multi-column layouts
+- Column spanning
+- Responsive columns
+- Custom column widths
+
+#### WhitespaceExtension
+
+Handles whitespace preservation and rendering.
+
+**Features:**
+- Preserve whitespace
+- Non-breaking spaces
+- Tab handling
+- Whitespace normalization
+
+## Options
+
+The formatting preset currently accepts an empty options object. Individual extensions can be configured by accessing them through the manager after creation.
+
+```typescript
+interface FormattingOptions {}
+```
+
+## Examples
+
+### Complete Rich Text Editor
+
+```typescript
+import { corePreset } from '@remirror/preset-core';
+import { formattingPreset } from '@remirror/preset-formatting';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create(() => [
+  ...corePreset(),
+  ...formattingPreset(),
+]);
+```
+
+### Accessing Individual Extensions
+
+```typescript
+import { formattingPreset } from '@remirror/preset-formatting';
+import { RemirrorManager } from '@remirror/core';
+
+const manager = RemirrorManager.create(() => formattingPreset());
+
+// Access specific extensions
+const textColorExt = manager.getExtension('textColor');
+const fontSizeExt = manager.getExtension('fontSize');
+```
+
+### Using Formatting Commands
+
+```typescript
+// In your React component or command handler
+const { commands } = useRemirror();
+
+// Apply text color
+commands.setTextColor({ color: '#ff0000' });
+
+// Apply highlight
+commands.setTextHighlight({ color: 'yellow' });
+
+// Transform text case
+commands.setUpperCase();
+commands.setLowerCase();
+commands.setTitleCase();
+
+// Set alignment
+commands.setTextAlign('center');
+
+// Apply font size
+commands.setFontSize({ size: '18px' });
+```
+
+## Extension Configuration
+
+While the preset itself doesn't take options, you can configure individual extensions:
+
+```typescript
+import { BoldExtension } from '@remirror/extension-bold';
+import { HeadingExtension } from '@remirror/extension-heading';
+import { TextColorExtension } from '@remirror/extension-text-color';
+
+const extensions = [
+  new BoldExtension({ weight: '600' }),
+  new HeadingExtension({ levels: [1, 2, 3] }),
+  new TextColorExtension({ defaultColor: '#000000' }),
+  // ... other formatting extensions
+];
+```
+
+## TypeScript
+
+### FormattingOptions
+
+```typescript
+interface FormattingOptions {}
+```
+
+### FormattingPreset
+
+```typescript
+type FormattingPreset = ReturnType<typeof formattingPreset>;
+```
+
+## Related
+
+- [WYSIWYG Preset](/api/presets/wysiwyg) - Includes basic formatting marks
+- [Core Preset](/api/presets/core) - Essential editor functionality
+- [Text Color Extension](/api/extensions/text-color)
+- [Heading Extension](/api/extensions/heading)

@@ -1,0 +1,652 @@
+---
+title: Commands System
+description: Deep dive into Remirror's command system, transaction handling, and creating custom commands
+---
+
+# Commands System
+
+The command system is the backbone of Remirror's state management. Commands are functions that modify the editor state through transactions, providing a consistent API for all editor manipulations.
+
+<Info>
+  Commands in Remirror wrap ProseMirror's transaction system, enabling chainable operations, validation, and consistent state updates across your editor.
+</Info>
+
+## Understanding Commands
+
+A command is a function that receives the current editor state and can optionally dispatch a transaction to modify it.
+
+### Command Function Signature
+
+```typescript
+import { CommandFunction, CommandFunctionProps } from '@remirror/core';
+
+type CommandFunction = (props: CommandFunctionProps) => boolean;
+
+interface CommandFunctionProps {
+  // The current editor state
+  state: EditorState;
+  
+  // Transaction for making changes
+  tr: Transaction;
+  
+  // Dispatch function to apply changes
+  dispatch?: DispatchFunction;
+  
+  // The editor view
+  view?: EditorView;
+}
+```
+
+Commands return `true` if they can execute in the current context, `false` otherwise. When `dispatch` is undefined, commands run in "dry run" mode to check if they're enabled.
+
+<Note>
+  The return value indicates whether the command **can** execute, not whether it succeeded. This enables UI elements to check if commands are available before showing them.
+</Note>
+
+## Transaction Handling
+
+Transactions are the atomic units of state change in ProseMirror and Remirror.
+
+### Basic Transaction Usage
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+import { NodeExtension } from '@remirror/core';
+
+class MyExtension extends NodeExtension {
+  get name() {
+    return 'myNode' as const;
+  }
+  
+  @command()
+  insertMyNode(): CommandFunction {
+    return ({ tr, dispatch }) => {
+      // Check if we can insert at current position
+      const { $from } = tr.selection;
+      const index = $from.index();
+      
+      if (!$from.parent.canReplaceWith(index, index, this.type)) {
+        return false;
+      }
+      
+      // Create the node
+      const node = this.type.create();
+      
+      // Insert it at the current position
+      if (dispatch) {
+        tr.replaceSelectionWith(node);
+        dispatch(tr);
+      }
+      
+      return true;
+    };
+  }
+}
+```
+
+### Transaction Properties
+
+Transactions provide methods to modify document state:
+
+<CodeGroup>
+```typescript Content Modifications
+// Insert text
+tr.insertText('Hello', from, to);
+
+// Replace a range
+tr.replaceWith(from, to, node);
+
+// Delete content
+tr.delete(from, to);
+
+// Replace selection
+tr.replaceSelectionWith(node);
+```
+
+```typescript Selection Changes
+import { TextSelection, NodeSelection } from '@remirror/pm/state';
+
+// Set text selection
+tr.setSelection(TextSelection.create(tr.doc, from, to));
+
+// Select a node
+tr.setSelection(NodeSelection.create(tr.doc, pos));
+
+// Set selection at position
+tr.setSelection(Selection.near(tr.doc.resolve(pos)));
+```
+
+```typescript Marks
+// Add mark to range
+tr.addMark(from, to, schema.marks.bold.create());
+
+// Remove mark from range
+tr.removeMark(from, to, schema.marks.bold);
+
+// Add stored mark (for next insertion)
+tr.addStoredMark(schema.marks.bold.create());
+
+// Remove stored mark
+tr.removeStoredMark(schema.marks.bold);
+```
+
+```typescript Metadata
+// Add metadata to transaction
+tr.setMeta('myKey', { data: 'value' });
+
+// Retrieve metadata
+const meta = tr.getMeta('myKey');
+
+// Mark as addToHistory: false to prevent undo
+tr.setMeta('addToHistory', false);
+```
+</CodeGroup>
+
+## Creating Custom Commands
+
+### Simple Commands
+
+For straightforward document modifications:
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+import { MarkExtension } from '@remirror/core';
+
+class HighlightExtension extends MarkExtension {
+  get name() {
+    return 'highlight' as const;
+  }
+  
+  /**
+   * Toggle highlight mark on selection
+   */
+  @command()
+  toggleHighlight(color = 'yellow'): CommandFunction {
+    return ({ tr, dispatch, state }) => {
+      const { from, to } = tr.selection;
+      const markType = state.schema.marks.highlight;
+      
+      // Check if mark already exists
+      const hasMark = state.doc.rangeHasMark(from, to, markType);
+      
+      if (!dispatch) {
+        return true; // Command is always available
+      }
+      
+      if (hasMark) {
+        // Remove existing mark
+        tr.removeMark(from, to, markType);
+      } else {
+        // Add new mark with color
+        tr.addMark(from, to, markType.create({ color }));
+      }
+      
+      dispatch(tr);
+      return true;
+    };
+  }
+}
+```
+
+### Commands with Validation
+
+Add validation logic to control when commands are available:
+
+```typescript
+import { command, CommandFunction, NodeExtension } from '@remirror/core';
+
+class CodeBlockExtension extends NodeExtension {
+  get name() {
+    return 'codeBlock' as const;
+  }
+  
+  /**
+   * Convert current block to code block
+   */
+  @command()
+  convertToCodeBlock(language?: string): CommandFunction {
+    return ({ tr, dispatch, state }) => {
+      const { $from } = tr.selection;
+      const parentNode = $from.parent;
+      
+      // Only allow conversion of text blocks
+      if (!parentNode.isTextblock) {
+        return false;
+      }
+      
+      // Don't convert if already a code block
+      if (parentNode.type === this.type) {
+        return false;
+      }
+      
+      // Check if parent allows code blocks
+      const index = $from.index($from.depth - 1);
+      const grandparent = $from.node($from.depth - 1);
+      
+      if (!grandparent.canReplaceWith(index, index + 1, this.type)) {
+        return false;
+      }
+      
+      if (!dispatch) {
+        return true;
+      }
+      
+      // Perform conversion
+      const attrs = language ? { language } : {};
+      tr.setBlockType($from.before(), $from.after(), this.type, attrs);
+      dispatch(tr);
+      
+      return true;
+    };
+  }
+}
+```
+
+<Tip>
+  Always validate before attempting modifications. Return `false` early if a command can't execute in the current state.
+</Tip>
+
+### Commands with Position Tracking
+
+Use position mapping to handle async operations:
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+import { NodeExtension } from '@remirror/core';
+
+class ImageExtension extends NodeExtension {
+  get name() {
+    return 'image' as const;
+  }
+  
+  /**
+   * Insert image with async upload
+   */
+  @command()
+  uploadImage(file: File): CommandFunction {
+    return ({ tr, dispatch, view }) => {
+      if (!dispatch || !view) {
+        return true;
+      }
+      
+      const { from } = tr.selection;
+      
+      // Create position tracker
+      const tracker = this.store.helpers.addPositionTracker({
+        pos: from,
+        element: document.createElement('span'),
+      });
+      
+      // Insert placeholder
+      const placeholder = this.type.create({ src: '', loading: true });
+      tr.replaceSelectionWith(placeholder);
+      dispatch(tr);
+      
+      // Upload image asynchronously
+      this.uploadFile(file)
+        .then((src) => {
+          // Get current position from tracker
+          const pos = tracker.getPosition();
+          
+          if (pos) {
+            // Replace placeholder with actual image
+            const { state, dispatch } = view;
+            const tr = state.tr;
+            const node = this.type.create({ src });
+            
+            tr.replaceWith(pos, pos + 1, node);
+            dispatch(tr);
+          }
+          
+          // Clean up tracker
+          tracker.remove();
+        })
+        .catch(() => {
+          tracker.remove();
+        });
+      
+      return true;
+    };
+  }
+  
+  private async uploadFile(file: File): Promise<string> {
+    // Your upload logic here
+    return '/path/to/uploaded/image.png';
+  }
+}
+```
+
+## Chaining Commands
+
+Remirror's command chaining allows multiple commands to share a single transaction:
+
+```typescript
+import { useRemirrorContext } from '@remirror/react';
+
+function MyComponent() {
+  const { chain } = useRemirrorContext();
+  
+  const handleClick = () => {
+    // Chain multiple commands together
+    chain
+      .selectAll()
+      .toggleBold()
+      .toggleItalic()
+      .focus('end')
+      .run();
+  };
+  
+  return <button onClick={handleClick}>Format All</button>;
+}
+```
+
+### How Chaining Works
+
+The `CommandsExtension` maintains a shared transaction:
+
+```typescript
+// From: ~/workspace/source/packages/remirror__core/src/builtins/commands-extension.ts:121
+
+/**
+ * The current transaction which allows for making commands chainable.
+ * It is shared by all command helpers and can be used in keymaps.
+ */
+get transaction(): Transaction {
+  const state = this.store.getState();
+  
+  if (!this._transaction) {
+    this._transaction = state.tr;
+  }
+  
+  // Check that the current transaction is valid
+  const isValid = this._transaction.before.eq(state.doc);
+  
+  if (!isValid) {
+    // Create new transaction if state has changed
+    const tr = state.tr;
+    
+    // Copy steps from previous transaction
+    if (!isEmptyArray(this._transaction.steps)) {
+      for (const step of this._transaction.steps) {
+        tr.step(step);
+      }
+    }
+    
+    this._transaction = tr;
+  }
+  
+  return this._transaction;
+}
+```
+
+### Chain Execution Modes
+
+<Tabs>
+  <Tab title="run()">
+    Execute the chain and dispatch the transaction:
+    
+    ```typescript
+    chain
+      .insertText('Hello')
+      .toggleBold()
+      .run(); // Dispatches transaction
+    ```
+  </Tab>
+  
+  <Tab title="tr()">
+    Get the transaction without dispatching:
+    
+    ```typescript
+    const tr = chain
+      .insertText('Hello')
+      .toggleBold()
+      .tr(); // Returns transaction
+    
+    // Inspect or modify before dispatching
+    tr.setMeta('myMeta', true);
+    view.dispatch(tr);
+    ```
+  </Tab>
+  
+  <Tab title="enabled()">
+    Check if all chained commands can execute:
+    
+    ```typescript
+    const canFormat = chain
+      .toggleBold()
+      .toggleItalic()
+      .enabled(); // Returns boolean
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Chained commands must use the provided `tr` parameter, not `state.tr`. Creating a new transaction breaks the chain.
+</Warning>
+
+## Advanced Patterns
+
+### Delayed Commands
+
+Handle async operations within commands:
+
+```typescript
+import { DelayedCommand, CommandFunction } from '@remirror/core';
+
+class MyExtension extends NodeExtension {
+  @command()
+  insertDelayedContent(): CommandFunction {
+    const delayed = new DelayedCommand<string>(async ({ state }) => {
+      // Async operation
+      const content = await this.fetchContent();
+      return content;
+    });
+    
+    delayed.validate(({ tr, dispatch }) => {
+      // Immediate validation
+      const tracker = this.store.helpers.addPositionTracker({
+        pos: tr.selection.from,
+      });
+      
+      if (dispatch) {
+        dispatch(tr);
+      }
+      
+      return true;
+    });
+    
+    delayed.success(({ value, tr, dispatch }) => {
+      // Called when promise resolves
+      const pos = this.store.helpers.getPositionTracker();
+      
+      if (pos && dispatch) {
+        tr.insertText(value, pos);
+        dispatch(tr);
+      }
+      
+      return true;
+    });
+    
+    delayed.failure(({ error, dispatch }) => {
+      // Handle failure
+      console.error('Failed to load content:', error);
+      return true;
+    });
+    
+    return delayed.generateCommand();
+  }
+  
+  private async fetchContent(): Promise<string> {
+    return 'Loaded content';
+  }
+}
+```
+
+### Conditional Commands
+
+Commands that adapt based on context:
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+
+class SmartToggleExtension extends PlainExtension {
+  get name() {
+    return 'smartToggle' as const;
+  }
+  
+  /**
+   * Toggle between different block types intelligently
+   */
+  @command()
+  smartToggle(): CommandFunction {
+    return (props) => {
+      const { state } = props;
+      const { $from } = state.selection;
+      const parent = $from.parent;
+      
+      // Determine current block type and toggle accordingly
+      if (parent.type.name === 'paragraph') {
+        return this.store.commands.toggleHeading({ level: 1 })(props);
+      } else if (parent.type.name === 'heading') {
+        if (parent.attrs.level < 3) {
+          return this.store.commands.toggleHeading({ 
+            level: parent.attrs.level + 1 
+          })(props);
+        } else {
+          return this.store.commands.convertParagraph()(props);
+        }
+      }
+      
+      return false;
+    };
+  }
+}
+```
+
+### Transaction Helpers
+
+Utility commands for common operations:
+
+```typescript
+import { command, CommandFunction, insertText } from '@remirror/core';
+
+class TextUtilsExtension extends PlainExtension {
+  get name() {
+    return 'textUtils' as const;
+  }
+  
+  /**
+   * Insert text with marks
+   */
+  @command()
+  insertFormattedText(
+    text: string, 
+    marks: Record<string, any>
+  ): CommandFunction {
+    return insertText(text, { marks });
+  }
+  
+  /**
+   * Replace selected text
+   */
+  @command()
+  replaceSelection(text: string): CommandFunction {
+    return ({ tr, dispatch }) => {
+      const { from, to } = tr.selection;
+      
+      if (dispatch) {
+        tr.insertText(text, from, to);
+        dispatch(tr);
+      }
+      
+      return true;
+    };
+  }
+}
+```
+
+## Command Decorators
+
+Enhance commands with metadata for UI integration:
+
+```typescript
+import { command, CommandFunction } from '@remirror/core';
+
+const toggleBoldOptions: Remirror.CommandDecoratorOptions = {
+  icon: 'bold',
+  label: ({ t }) => t('Bold'),
+  description: ({ t }) => t('Make text bold'),
+  shortcut: 'Mod-b',
+};
+
+class BoldExtension extends MarkExtension {
+  @command(toggleBoldOptions)
+  toggleBold(): CommandFunction {
+    return toggleMark({ type: this.type });
+  }
+}
+
+// Access decorator metadata
+const metadata = manager.store.commands.toggleBold.metadata;
+console.log(metadata.icon); // 'bold'
+console.log(metadata.shortcut); // 'Mod-b'
+```
+
+<Info>
+  Decorator metadata is available at `commands.commandName.metadata` and is commonly used to build toolbars and menus.
+</Info>
+
+## Testing Commands
+
+```typescript
+import { renderEditor } from '@remirror/testing';
+import { MyExtension } from './my-extension';
+
+describe('MyExtension', () => {
+  it('should execute command', () => {
+    const {
+      view,
+      add,
+      nodes: { p, doc },
+    } = renderEditor([new MyExtension()]);
+    
+    // Set initial content
+    add(doc(p('Hello <cursor>')));
+    
+    // Execute command
+    const result = view.state.commands.myCommand();
+    
+    // Verify
+    expect(result).toBe(true);
+    expect(view.state.doc).toEqualRemirrorDocument(
+      doc(p('Hello World'))
+    );
+  });
+  
+  it('should check command availability', () => {
+    const { view } = renderEditor([new MyExtension()]);
+    
+    // Dry run (no dispatch)
+    const canExecute = view.state.commands.myCommand();
+    
+    expect(canExecute).toBe(true);
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Plugins" icon="puzzle-piece" href="./plugins">
+    Learn about ProseMirror plugin integration
+  </Card>
+  <Card title="Schemas" icon="diagram-project" href="./schemas">
+    Understand document schemas and validation
+  </Card>
+  <Card title="Helpers" icon="circle-question" href="/api/helpers">
+    Query editor state without modifications
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/concepts/extensions">
+    Master extension development
+  </Card>
+</CardGroup>

@@ -1,0 +1,605 @@
+---
+title: 'Migrating from v2 to v3'
+description: 'Complete guide to upgrading from Remirror v2 to v3 with breaking changes and migration steps'
+---
+
+# Migration to Remirror v3
+
+This guide provides the required steps to migrate from Remirror v2 to Remirror v3.
+
+Remirror v3 introduces Stage 3 decorators, improved i18n flexibility, and a more modular architecture by moving optional components to separate packages.
+
+## Installing
+
+<Steps>
+  <Step title="Update dependencies">
+    Install the latest versions of Remirror packages:
+    
+    ```bash
+    npm add --save remirror@latest @remirror/react@latest @remirror/pm@latest
+    ```
+  </Step>
+  
+  <Step title="Verify installation">
+    Ensure all Remirror packages are at version 3.0.0 or higher.
+  </Step>
+</Steps>
+
+## Stage 3 Decorators
+
+<Warning>
+  Remirror v3 has been updated to use [Stage 3 decorators](https://github.com/tc39/proposal-decorators). If you use custom extensions with decorators (`@extension`, `@command`, `@helper`, `@keyBinding`), you'll need to update your build configuration.
+</Warning>
+
+If you use Remirror's decorators in your custom extensions, follow these configuration updates:
+
+### TypeScript
+
+Set `experimentalDecorators` to **false** in your `tsconfig.json`:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "experimentalDecorators": false
+  }
+}
+```
+
+### Vite
+
+Ensure the `esbuild` version is at least `0.21.0` and update your Vite config:
+
+```json vite.config.json
+{
+  "esbuild": {
+    "target": "ES2020"
+  }
+}
+```
+
+### Babel
+
+Update your Babel config to use the latest decorator spec:
+
+```json .babelrc
+{
+  "plugins": [
+    ["@babel/plugin-proposal-decorators", { "version": "2023-11" }]
+  ]
+}
+```
+
+### Next.js
+
+<Warning>
+  At the time of writing, [Next.js does not support Stage 3 decorators](https://github.com/vercel/next.js/issues/48360).
+</Warning>
+
+Use legacy decorators as a workaround:
+
+```ts
+import { legacyCommand as command } from 'remirror';
+import { legacyHelper as helper } from 'remirror';
+import { legacyKeyBinding as keyBinding } from 'remirror';
+```
+
+**Legacy Decorator Mapping:**
+
+| Old name     | New name           |
+| ------------ | ------------------ |
+| `command`    | `legacyCommand`    |
+| `helper`     | `legacyHelper`     |
+| `keyBinding` | `legacyKeyBinding` |
+
+<Warning>
+  Legacy decorators are **deprecated** and will be removed in a future release. Migrate to Stage 3 decorators when your build tool supports them.
+</Warning>
+
+The `extension` decorator is backwards compatible and does not need updating.
+
+## i18n Changes
+
+### Removed `i18n` Prop
+
+The `i18n` prop has been removed from the `<Remirror />` component and replaced with an `i18nFormat` function. This allows you to use **any** i18n library with Remirror.
+
+<CodeGroup>
+```tsx Before (v2)
+import { Remirror, useRemirror } from '@remirror/react';
+import { i18n } from '@lingui/core';
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [/* extensions */],
+  });
+
+  return <Remirror manager={manager} i18n={i18n} />;
+};
+```
+
+```tsx After (v3) - Using react-i18next
+import { useTranslation } from 'react-i18next';
+import { Remirror, useRemirror } from '@remirror/react';
+import type { I18nFormatter } from 'remirror';
+
+const Editor = () => {
+  const { t } = useTranslation();
+
+  const i18nFormat: I18nFormatter = useCallback(
+    (message, values) => {
+      return t(message.id, values);
+    },
+    [t],
+  );
+
+  const { manager } = useRemirror({
+    extensions: () => [/* extensions */],
+  });
+
+  return <Remirror manager={manager} i18nFormat={i18nFormat} />;
+};
+```
+
+```tsx After (v3) - Using @remirror/i18n
+import { i18nFormat } from '@remirror/i18n';
+import { Remirror, useRemirror } from '@remirror/react';
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [/* extensions */],
+  });
+
+  return <Remirror manager={manager} i18nFormat={i18nFormat} />;
+};
+```
+</CodeGroup>
+
+### Using @remirror/messages
+
+The `@remirror/messages` package now exposes translatable strings as JSON files:
+
+```ts
+import i18n from 'i18next';
+import ICU from 'i18next-icu';
+import { initReactI18next } from 'react-i18next';
+import allMessages from '@remirror/messages/en/all-messages.json';
+
+i18n
+  .use(ICU) // Required for @remirror/messages
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: {
+        translation: allMessages,
+      },
+    },
+    lng: 'en',
+    fallbackLng: 'en',
+    interpolation: {
+      escapeValue: false,
+    },
+  });
+```
+
+### useI18n Hook Changes
+
+<CodeGroup>
+```tsx Before (v2)
+const { t, i18n } = useI18n();
+```
+
+```tsx After (v3)
+const t = useI18n();
+// Where "t" is the same function passed via `i18nFormat`
+```
+</CodeGroup>
+
+## MUI Components Moved to @remirror/react-ui
+
+<Warning>
+  All MUI-based components have been moved from `@remirror/react` to the new optional package `@remirror/react-ui`. This prevents bundling Material-UI if you don't use these components.
+</Warning>
+
+<Steps>
+  <Step title="Install @remirror/react-ui">
+    ```bash
+    npm add @remirror/react-ui
+    ```
+  </Step>
+  
+  <Step title="Update imports">
+    Update your component imports from `@remirror/react` to `@remirror/react-ui`.
+  </Step>
+</Steps>
+
+<CodeGroup>
+```tsx Before (v2)
+import React from 'react';
+import { BoldExtension } from 'remirror/extensions';
+import { 
+  Remirror, 
+  ThemeProvider, 
+  ToggleBoldButton, 
+  Toolbar, 
+  useRemirror 
+} from '@remirror/react';
+
+const extensions = () => [new BoldExtension()];
+
+const ToggleBold = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions: extensions,
+    content: '<p>Text in <b>bold</b></p>',
+    stringHandler: 'html',
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror
+        manager={manager}
+        autoFocus
+        onChange={onChange}
+        initialContent={state}
+        autoRender='end'
+      >
+        <Toolbar>
+          <ToggleBoldButton />
+        </Toolbar>
+      </Remirror>
+    </ThemeProvider>
+  );
+};
+```
+
+```tsx After (v3)
+import React from 'react';
+import { BoldExtension } from 'remirror/extensions';
+import { Remirror, ThemeProvider, useRemirror } from '@remirror/react';
+import { ToggleBoldButton, Toolbar } from '@remirror/react-ui';
+
+const extensions = () => [new BoldExtension()];
+
+const ToggleBold = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions: extensions,
+    content: '<p>Text in <b>bold</b></p>',
+    stringHandler: 'html',
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror
+        manager={manager}
+        autoFocus
+        onChange={onChange}
+        initialContent={state}
+        autoRender='end'
+      >
+        <Toolbar>
+          <ToggleBoldButton />
+        </Toolbar>
+      </Remirror>
+    </ThemeProvider>
+  );
+};
+```
+</CodeGroup>
+
+<Accordion title="Complete list of moved components">
+  **Toolbars:**
+  - `Toolbar`
+  - `FloatingToolbar`
+  - `MarkdownToolbar`
+  - `WysiwygToolbar`
+  - `VerticalDivider`
+
+  **Buttons:**
+  - `CenterAlignButton`
+  - `CommandButton`
+  - `CopyButton`
+  - `CreateTableButton`
+  - `CutButton`
+  - `DecreaseFontSizeButton`
+  - `DecreaseIndentButton`
+  - `DropdownButton`
+  - `IncreaseFontSizeButton`
+  - `IncreaseIndentButton`
+  - `InsertHorizontalRuleButton`
+  - `JustifyAlignButton`
+  - `LeftAlignButton`
+  - `PasteButton`
+  - `RedoButton`
+  - `RightAlignButton`
+  - `ToggleBlockquoteButton`
+  - `ToggleBoldButton`
+  - `ToggleBulletListButton`
+  - `ToggleCalloutButton`
+  - `ToggleCodeBlockButton`
+  - `ToggleCodeButton`
+  - `ToggleColumnsButton`
+  - `ToggleHeadingButton`
+  - `ToggleItalicButton`
+  - `ToggleOrderedListButton`
+  - `ToggleStrikeButton`
+  - `ToggleSubscriptButton`
+  - `ToggleSuperscriptButton`
+  - `ToggleTaskListButton`
+  - `ToggleUnderlineButton`
+  - `ToggleWhitespaceButton`
+  - `UndoButton`
+
+  **Button Groups:**
+  - `BaselineButtonGroup`
+  - `BasicFormattingButtonGroup`
+  - `CalloutTypeButtonGroup`
+  - `CommandButtonGroup`
+  - `DataTransferButtonGroup`
+  - `FormattingButtonGroup`
+  - `HeadingLevelButtonGroup`
+  - `HistoryButtonGroup`
+  - `IndentationButtonGroup`
+  - `ListButtonGroup`
+  - `TextAlignmentButtonGroup`
+
+  **Other Components:**
+  - `FindReplaceComponent`
+  - `CommandMenuItem`
+  - `ToggleCalloutMenuItem`
+  - `ToggleHeadingMenuItem`
+  - `CodeBlockLanguageSelect`
+</Accordion>
+
+## SearchExtension Removed
+
+<Warning>
+  `SearchExtension` has been completely removed. Use `FindExtension` instead, which offers more features and better performance.
+</Warning>
+
+<CodeGroup>
+```tsx Before (v2)
+import React from 'react';
+import { wysiwygPreset } from 'remirror/extensions';
+import { Remirror, ThemeProvider, useRemirror } from '@remirror/react';
+
+const extensions = () =>
+  wysiwygPreset({
+    alwaysSearch: true,
+  });
+
+const UsingWysiwygPreset = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions: extensions,
+    content: '<p>Text to search</p>',
+    stringHandler: 'html',
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror
+        manager={manager}
+        autoFocus
+        onChange={onChange}
+        initialContent={state}
+        autoRender='end'
+      />
+    </ThemeProvider>
+  );
+};
+```
+
+```tsx After (v3)
+import React from 'react';
+import { wysiwygPreset } from 'remirror/extensions';
+import { Remirror, ThemeProvider, useRemirror } from '@remirror/react';
+
+const extensions = () =>
+  wysiwygPreset({
+    alwaysFind: true, // Changed from alwaysSearch
+  });
+
+const UsingWysiwygPreset = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions: extensions,
+    content: '<p>Text to search</p>',
+    stringHandler: 'html',
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror
+        manager={manager}
+        autoFocus
+        onChange={onChange}
+        initialContent={state}
+        autoRender='end'
+      />
+    </ThemeProvider>
+  );
+};
+```
+</CodeGroup>
+
+## CodeBlockLanguageSelector Changes
+
+The `CodeBlockLanguageSelector` component has moved from `@remirror/extension-react-language-select` to `@remirror/react-ui`.
+
+Additionally:
+- Now renders a MUI `Select` component instead of a native `select` element
+- Renders in the top **right** corner by default (was top left)
+- Pass `position='left'` to render in the top left corner
+
+<CodeGroup>
+```tsx Before (v2)
+import 'remirror/styles/all.css';
+import React from 'react';
+import css from 'refractor/lang/css.js';
+import javascript from 'refractor/lang/javascript.js';
+import typescript from 'refractor/lang/typescript.js';
+import { CodeBlockExtension } from 'remirror/extensions';
+import { CodeBlockLanguageSelect } from '@remirror/extension-react-language-select';
+import { Remirror, ThemeProvider, useRemirror } from '@remirror/react';
+
+const extensions = () => [
+  new CodeBlockExtension({
+    supportedLanguages: [css, javascript, typescript],
+  }),
+];
+
+const EditorWithCodeBlocks = () => {
+  const { manager, state } = useRemirror({ 
+    extensions, 
+    content: '<pre><code data-code-block-language="typescript">function sayHello {\n  console.log(\'Hello world, TypeScript!\')\n}</code></pre>', 
+    stringHandler: 'html' 
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror manager={manager} initialContent={state} autoRender>
+        <CodeBlockLanguageSelect />
+      </Remirror>
+    </ThemeProvider>
+  );
+};
+```
+
+```tsx After (v3)
+import 'remirror/styles/all.css';
+import React from 'react';
+import css from 'refractor/lang/css.js';
+import javascript from 'refractor/lang/javascript.js';
+import typescript from 'refractor/lang/typescript.js';
+import { CodeBlockExtension } from 'remirror/extensions';
+import { Remirror, ThemeProvider, useRemirror } from '@remirror/react';
+import { CodeBlockLanguageSelect } from '@remirror/react-ui';
+
+const extensions = () => [
+  new CodeBlockExtension({
+    supportedLanguages: [css, javascript, typescript],
+  }),
+];
+
+const EditorWithCodeBlocks = () => {
+  const { manager, state } = useRemirror({ 
+    extensions, 
+    content: '<pre><code data-code-block-language="typescript">function sayHello {\n  console.log(\'Hello world, TypeScript!\')\n}</code></pre>', 
+    stringHandler: 'html' 
+  });
+
+  return (
+    <ThemeProvider>
+      <Remirror manager={manager} initialContent={state} autoRender>
+        <CodeBlockLanguageSelect />
+      </Remirror>
+    </ThemeProvider>
+  );
+};
+```
+</CodeGroup>
+
+## Optional Extensions Require Installation
+
+CodeMirror (v5), Yjs, and React Tables extensions are no longer bundled by default. Install them separately if needed:
+
+```bash
+npm add @remirror/extension-codemirror5
+npm add @remirror/extension-yjs
+npm add @remirror/extension-react-tables
+```
+
+<CodeGroup>
+```ts Before (v2)
+import { 
+  BlockquoteExtension, 
+  CodeMirrorExtension, 
+  YjsExtension 
+} from 'remirror/extensions';
+import { TableExtension } from '@remirror/react';
+
+const extensions = () => [
+  new BlockquoteExtension(),
+  new CodeMirrorExtension(),
+  new YjsExtension(),
+  new TableExtension(),
+];
+```
+
+```ts After (v3)
+import { BlockquoteExtension } from 'remirror/extensions';
+import { CodeMirrorExtension } from '@remirror/extension-codemirror5';
+import { YjsExtension } from '@remirror/extension-yjs';
+import { TableExtension } from '@remirror/extension-react-tables';
+
+const extensions = () => [
+  new BlockquoteExtension(),
+  new CodeMirrorExtension(),
+  new YjsExtension(),
+  new TableExtension(),
+];
+```
+</CodeGroup>
+
+## Command Dry Run: Use enabled() Instead of isEnabled()
+
+The `.isEnabled()` method has been removed. Use `.enabled()` instead:
+
+<CodeGroup>
+```tsx Before (v2)
+const { toggleBold } = useCommands();
+
+const handleClick = useCallback(() => {
+  if (toggleBold.isEnabled()) {
+    toggleBold();
+  }
+}, [toggleBold]);
+```
+
+```tsx After (v3)
+const { toggleBold } = useCommands();
+
+const handleClick = useCallback(() => {
+  if (toggleBold.enabled()) {
+    toggleBold();
+  }
+}, [toggleBold]);
+```
+</CodeGroup>
+
+## Removed Deprecated APIs
+
+### Decorators and Hooks
+
+- `extensionDecorator` → Use `extension`
+- `useSuggester` → Use `useSuggest`
+- `UseSuggesterProps` → Use `UseSuggestProps`
+
+### Helper Functions
+
+- `getRemirrorJSON` → Use `getJSON`
+
+### Testing Utilities
+
+**jest-prosemirror:**
+- `jumpTo` → Use `selectText`
+
+**jest-remirror:**
+- `start` and `end` → Use `from` and `to`
+- `jsdomExtras` → Use `jsdomPolyfills`
+
+### Theme Functions
+
+- `getTheme` → Use `getThemeVar`
+- `getThemeProps` → Use `getThemeVarName`
+
+### Type Definitions
+
+| Removed Type        | Replacement             |
+| ------------------- | ----------------------- |
+| `ClickHandler`      | `ClickEventHandler`     |
+| `ClickMarkHandler`  | `ClickMarkEventHandler` |
+| `PromiseValue`      | `Awaited` (built-in)    |
+| `Mutable`           | `Writable`              |
+| `UseSuggesterProps` | `UseSuggestProps`       |
+
+## Need Help?
+
+If you encounter any issues during migration, reach out on [Discord](https://remirror.io/chat) or consult the [announcement post](/blog/announcement-v3) for more details about the v3 release.

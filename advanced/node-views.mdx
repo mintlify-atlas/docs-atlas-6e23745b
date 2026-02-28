@@ -1,0 +1,917 @@
+---
+title: Node Views
+description: Create custom node views with React components, understand the node view lifecycle, and implement interactive editor elements
+---
+
+# Node Views
+
+Node views give you complete control over how nodes are rendered in the editor. Instead of using the default DOM rendering from `toDOM`, you can provide custom rendering logic—including full React components.
+
+<Info>
+  Node views bridge ProseMirror's document model and your custom UI, enabling interactive elements, real-time previews, and complex visualizations within the editor.
+</Info>
+
+## Understanding Node Views
+
+A node view is an object that handles the rendering and interaction for a specific node instance:
+
+```typescript
+import { NodeView, EditorView } from '@remirror/pm/view';
+import { ProsemirrorNode } from '@remirror/pm/model';
+
+interface NodeView {
+  // The DOM node representing this node view
+  dom: HTMLElement;
+  
+  // Optional: where content should be rendered
+  contentDOM?: HTMLElement;
+  
+  // Update the view when node changes
+  update?(node: ProsemirrorNode, decorations: readonly Decoration[]): boolean;
+  
+  // Select this node
+  selectNode?(): void;
+  
+  // Deselect this node  
+  deselectNode?(): void;
+  
+  // Handle node being destroyed
+  destroy?(): void;
+  
+  // Stop event propagation for this node
+  stopEvent?(event: Event): boolean;
+  
+  // Position should be ignored when finding positions
+  ignoreMutation?(mutation: MutationRecord): boolean;
+}
+```
+
+## Basic Node Views
+
+### Simple DOM Node View
+
+Create a node view using vanilla JavaScript:
+
+```typescript
+import { NodeExtension, NodeViewMethod } from '@remirror/core';
+import { EditorView } from '@remirror/pm/view';
+
+class BadgeExtension extends NodeExtension {
+  get name() {
+    return 'badge' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      inline: true,
+      attrs: {
+        color: { default: 'blue' },
+        text: { default: '' },
+        ...extra.defaults(),
+      },
+      group: 'inline',
+      parseDOM: [{
+        tag: 'span[data-badge]',
+        getAttrs: (dom) => ({
+          color: (dom as HTMLElement).getAttribute('data-color'),
+          text: (dom as HTMLElement).textContent,
+          ...extra.parse(dom),
+        }),
+      }],
+      toDOM: (node) => [
+        'span',
+        {
+          'data-badge': '',
+          'data-color': node.attrs.color,
+          class: `badge badge-${node.attrs.color}`,
+          ...extra.dom(node),
+        },
+        node.attrs.text,
+      ],
+    };
+  }
+  
+  createNodeViews(): NodeViewMethod {
+    return (node, view, getPos) => {
+      // Create DOM element
+      const dom = document.createElement('span');
+      dom.classList.add('badge', `badge-${node.attrs.color}`);
+      dom.textContent = node.attrs.text;
+      
+      // Make it interactive
+      dom.addEventListener('click', () => {
+        console.log('Badge clicked:', node.attrs.text);
+      });
+      
+      return {
+        dom,
+        
+        // Update when node changes
+        update: (newNode) => {
+          // Only update if it's still a badge
+          if (newNode.type !== node.type) {
+            return false;
+          }
+          
+          // Update DOM
+          dom.className = `badge badge-${newNode.attrs.color}`;
+          dom.textContent = newNode.attrs.text;
+          
+          return true;
+        },
+        
+        // Clean up
+        destroy: () => {
+          dom.remove();
+        },
+      };
+    };
+  }
+}
+```
+
+### Node View with Content
+
+For nodes that contain editable content:
+
+```typescript
+import { NodeExtension, NodeViewMethod } from '@remirror/core';
+
+class CalloutExtension extends NodeExtension {
+  get name() {
+    return 'callout' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      content: 'block+',
+      group: 'block',
+      attrs: {
+        type: { default: 'info' },
+        ...extra.defaults(),
+      },
+      parseDOM: [{
+        tag: 'div[data-callout]',
+        getAttrs: (dom) => ({
+          type: (dom as HTMLElement).getAttribute('data-type'),
+          ...extra.parse(dom),
+        }),
+      }],
+      toDOM: (node) => [
+        'div',
+        { 'data-callout': '', 'data-type': node.attrs.type, ...extra.dom(node) },
+        0,
+      ],
+    };
+  }
+  
+  createNodeViews(): NodeViewMethod {
+    return (node, view, getPos) => {
+      // Create wrapper
+      const dom = document.createElement('div');
+      dom.classList.add('callout', `callout-${node.attrs.type}`);
+      
+      // Create icon
+      const icon = document.createElement('div');
+      icon.classList.add('callout-icon');
+      icon.textContent = this.getIcon(node.attrs.type);
+      dom.appendChild(icon);
+      
+      // Create content area
+      const contentDOM = document.createElement('div');
+      contentDOM.classList.add('callout-content');
+      dom.appendChild(contentDOM);
+      
+      return {
+        dom,
+        contentDOM, // ProseMirror renders content here
+        
+        update: (newNode) => {
+          if (newNode.type !== node.type) {
+            return false;
+          }
+          
+          // Update icon if type changed
+          if (newNode.attrs.type !== node.attrs.type) {
+            dom.className = `callout callout-${newNode.attrs.type}`;
+            icon.textContent = this.getIcon(newNode.attrs.type);
+          }
+          
+          return true;
+        },
+      };
+    };
+  }
+  
+  private getIcon(type: string): string {
+    const icons = {
+      info: 'ℹ️',
+      warning: '⚠️',
+      error: '❌',
+      success: '✅',
+    };
+    return icons[type] || icons.info;
+  }
+}
+```
+
+<Note>
+  When you provide `contentDOM`, ProseMirror manages the content inside it. Don't modify `contentDOM` directly—let ProseMirror handle it.
+</Note>
+
+## React Node Views
+
+Remirror provides first-class support for React components as node views:
+
+### Basic React Node View
+
+```typescript
+import { NodeExtension, NodeViewMethod } from '@remirror/core';
+import { ComponentType } from 'react';
+import { NodeViewComponentProps } from '@remirror/react';
+
+class CounterExtension extends NodeExtension {
+  get name() {
+    return 'counter' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      inline: true,
+      attrs: {
+        count: { default: 0 },
+        ...extra.defaults(),
+      },
+      group: 'inline',
+      atom: true,
+      parseDOM: [{
+        tag: 'span[data-counter]',
+        getAttrs: (dom) => ({
+          count: parseInt((dom as HTMLElement).getAttribute('data-count') || '0'),
+          ...extra.parse(dom),
+        }),
+      }],
+      toDOM: (node) => [
+        'span',
+        { 'data-counter': '', 'data-count': node.attrs.count, ...extra.dom(node) },
+        String(node.attrs.count),
+      ],
+    };
+  }
+  
+  ReactComponent: ComponentType<NodeViewComponentProps> = ({
+    node,
+    updateAttributes,
+  }) => {
+    const handleIncrement = () => {
+      updateAttributes({ count: node.attrs.count + 1 });
+    };
+    
+    const handleDecrement = () => {
+      updateAttributes({ count: node.attrs.count - 1 });
+    };
+    
+    return (
+      <span className="counter">
+        <button onClick={handleDecrement}>-</button>
+        <span className="counter-value">{node.attrs.count}</span>
+        <button onClick={handleIncrement}>+</button>
+      </span>
+    );
+  };
+}
+```
+
+### React Node View with Content
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+import { ComponentType } from 'react';
+import { NodeViewComponentProps } from '@remirror/react';
+
+class CollapsibleExtension extends NodeExtension {
+  get name() {
+    return 'collapsible' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      content: 'block+',
+      group: 'block',
+      attrs: {
+        title: { default: '' },
+        open: { default: true },
+        ...extra.defaults(),
+      },
+      parseDOM: [{
+        tag: 'details',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          const summary = element.querySelector('summary');
+          return {
+            title: summary?.textContent || '',
+            open: element.hasAttribute('open'),
+            ...extra.parse(dom),
+          };
+        },
+      }],
+      toDOM: (node) => [
+        'details',
+        { open: node.attrs.open ? '' : null, ...extra.dom(node) },
+        ['summary', node.attrs.title],
+        ['div', 0],
+      ],
+    };
+  }
+  
+  ReactComponent: ComponentType<NodeViewComponentProps> = ({
+    node,
+    updateAttributes,
+    contentRef,
+  }) => {
+    const [isOpen, setIsOpen] = React.useState(node.attrs.open);
+    
+    const handleToggle = () => {
+      const newOpen = !isOpen;
+      setIsOpen(newOpen);
+      updateAttributes({ open: newOpen });
+    };
+    
+    return (
+      <details open={isOpen} className="collapsible">
+        <summary onClick={handleToggle}>
+          {node.attrs.title}
+        </summary>
+        <div className="collapsible-content" ref={contentRef} />
+      </details>
+    );
+  };
+}
+```
+
+<Tip>
+  Use `contentRef` to mark where ProseMirror should render the node's content. This is the React equivalent of `contentDOM`.
+</Tip>
+
+## Node View Props
+
+React node views receive comprehensive props:
+
+```typescript
+import { NodeViewComponentProps } from '@remirror/react';
+
+interface NodeViewComponentProps {
+  // The node being rendered
+  node: ProsemirrorNode;
+  
+  // Current editor view
+  view: EditorView;
+  
+  // Function to get node's position
+  getPosition: () => number;
+  
+  // Update node attributes
+  updateAttributes: (attrs: ProsemirrorAttributes) => void;
+  
+  // Decorations on this node
+  decorations: readonly Decoration[];
+  
+  // Whether node is selected
+  selected: boolean;
+  
+  // Ref for content container (if node has content)
+  contentRef?: RefCallback<HTMLElement>;
+  
+  // All store helpers and commands
+  ...remirrorContext
+}
+```
+
+### Using Node View Props
+
+```typescript
+import { NodeViewComponentProps } from '@remirror/react';
+
+const ImageNodeView: ComponentType<NodeViewComponentProps> = ({
+  node,
+  selected,
+  updateAttributes,
+  getPosition,
+  view,
+}) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  
+  const handleResize = (width: number, height: number) => {
+    updateAttributes({ width, height });
+  };
+  
+  const handleDelete = () => {
+    const pos = getPosition();
+    const tr = view.state.tr.delete(pos, pos + node.nodeSize);
+    view.dispatch(tr);
+  };
+  
+  return (
+    <div className={`image-node ${selected ? 'selected' : ''}`}>
+      <img
+        src={node.attrs.src}
+        alt={node.attrs.alt}
+        width={node.attrs.width}
+        height={node.attrs.height}
+      />
+      
+      {selected && (
+        <div className="image-toolbar">
+          <button onClick={() => setIsEditing(true)}>Edit</button>
+          <button onClick={handleDelete}>Delete</button>
+          <ResizeHandle onResize={handleResize} />
+        </div>
+      )}
+      
+      {isEditing && (
+        <ImageEditor
+          node={node}
+          onSave={(attrs) => {
+            updateAttributes(attrs);
+            setIsEditing(false);
+          }}
+          onCancel={() => setIsEditing(false)}
+        />
+      )}
+    </div>
+  );
+};
+```
+
+## Node View Lifecycle
+
+### Creation and Updates
+
+```typescript
+// From: ~/workspace/source/packages/remirror__extension-react-component/src/react-node-view.tsx:31
+
+export class ReactNodeView implements NodeView {
+  // Node view is created when node is added to document
+  constructor({
+    node,
+    view,
+    getPosition,
+    portalContainer,
+    ReactComponent,
+  }: ReactNodeViewProps) {
+    this.#node = node;
+    this.#view = view;
+    this.#getPosition = getPosition;
+    this.#Component = ReactComponent;
+    
+    // Create DOM structure
+    this.#dom = this.createDom();
+    const { contentDOM, wrapper } = this.createContentDom() ?? {};
+    this.#contentDOM = contentDOM;
+    
+    // Render React component
+    this.renderComponent();
+  }
+  
+  // Called when node attributes or content change
+  update(node: ProsemirrorNode, decorations: readonly Decoration[]) {
+    // Reject update if node type changed
+    if (node.type !== this.#node.type) {
+      return false;
+    }
+    
+    // Accept update
+    this.#node = node;
+    this.#decorations = decorations;
+    
+    // Re-render React component
+    this.renderComponent();
+    
+    return true;
+  }
+  
+  // Called when node is selected
+  selectNode() {
+    this.#selected = true;
+    this.#dom.classList.add('ProseMirror-selectednode');
+    this.renderComponent();
+  }
+  
+  // Called when node is deselected
+  deselectNode() {
+    this.#selected = false;
+    this.#dom.classList.remove('ProseMirror-selectednode');
+    this.renderComponent();
+  }
+  
+  // Called when node view is destroyed
+  destroy() {
+    this.#portalContainer.remove(this.#dom);
+    this.#dom.remove();
+  }
+}
+```
+
+### Handling Mutations
+
+```typescript
+import { NodeExtension, NodeViewMethod } from '@remirror/core';
+
+class CodeBlockExtension extends NodeExtension {
+  createNodeViews(): NodeViewMethod {
+    return (node, view, getPos) => {
+      const dom = document.createElement('pre');
+      const code = document.createElement('code');
+      dom.appendChild(code);
+      
+      // Render initial content
+      code.textContent = node.textContent;
+      
+      return {
+        dom,
+        
+        update: (newNode) => {
+          if (newNode.type !== node.type) {
+            return false;
+          }
+          
+          // Update syntax highlighting
+          code.textContent = newNode.textContent;
+          this.highlightCode(code, newNode.attrs.language);
+          
+          return true;
+        },
+        
+        // Control which mutations to ignore
+        ignoreMutation: (mutation) => {
+          // Ignore changes to code content (ProseMirror handles it)
+          if (mutation.type === 'characterData') {
+            return true;
+          }
+          
+          // Ignore attribute changes to syntax highlighting spans
+          if (
+            mutation.type === 'attributes' &&
+            (mutation.target as HTMLElement).tagName === 'SPAN'
+          ) {
+            return true;
+          }
+          
+          return false;
+        },
+      };
+    };
+  }
+  
+  private highlightCode(element: HTMLElement, language: string) {
+    // Apply syntax highlighting
+  }
+}
+```
+
+<Warning>
+  `ignoreMutation` should return `true` for mutations that don't affect document structure. Returning `false` causes ProseMirror to re-render the node.
+</Warning>
+
+## Advanced Patterns
+
+### Atomic Nodes
+
+Nodes that act as single units:
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+import { ComponentType } from 'react';
+
+class MentionExtension extends NodeExtension {
+  get name() {
+    return 'mention' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      inline: true,
+      group: 'inline',
+      
+      // Atomic nodes can't be edited
+      atom: true,
+      
+      attrs: {
+        id: { default: null },
+        label: { default: null },
+        ...extra.defaults(),
+      },
+      
+      parseDOM: [{
+        tag: 'span[data-mention]',
+        getAttrs: (dom) => ({
+          id: (dom as HTMLElement).getAttribute('data-id'),
+          label: (dom as HTMLElement).textContent,
+          ...extra.parse(dom),
+        }),
+      }],
+      
+      toDOM: (node) => [
+        'span',
+        {
+          'data-mention': '',
+          'data-id': node.attrs.id,
+          class: 'mention',
+          ...extra.dom(node),
+        },
+        `@${node.attrs.label}`,
+      ],
+    };
+  }
+  
+  ReactComponent: ComponentType<NodeViewComponentProps> = ({
+    node,
+    selected,
+  }) => {
+    return (
+      <span
+        className={`mention ${selected ? 'selected' : ''}`}
+        data-mention-id={node.attrs.id}
+      >
+        @{node.attrs.label}
+      </span>
+    );
+  };
+}
+```
+
+### Interactive Widgets
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+import { ComponentType } from 'react';
+
+class ChartExtension extends NodeExtension {
+  get name() {
+    return 'chart' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      group: 'block',
+      atom: true,
+      attrs: {
+        data: { default: [] },
+        type: { default: 'bar' },
+        ...extra.defaults(),
+      },
+      parseDOM: [{
+        tag: 'div[data-chart]',
+        getAttrs: (dom) => ({
+          data: JSON.parse(
+            (dom as HTMLElement).getAttribute('data-chart-data') || '[]'
+          ),
+          type: (dom as HTMLElement).getAttribute('data-chart-type'),
+          ...extra.parse(dom),
+        }),
+      }],
+      toDOM: (node) => [
+        'div',
+        {
+          'data-chart': '',
+          'data-chart-type': node.attrs.type,
+          'data-chart-data': JSON.stringify(node.attrs.data),
+          ...extra.dom(node),
+        },
+      ],
+    };
+  }
+  
+  ReactComponent: ComponentType<NodeViewComponentProps> = ({
+    node,
+    updateAttributes,
+  }) => {
+    const [isEditing, setIsEditing] = React.useState(false);
+    
+    return (
+      <div className="chart-node">
+        {isEditing ? (
+          <ChartEditor
+            data={node.attrs.data}
+            type={node.attrs.type}
+            onSave={(data, type) => {
+              updateAttributes({ data, type });
+              setIsEditing(false);
+            }}
+            onCancel={() => setIsEditing(false)}
+          />
+        ) : (
+          <>
+            <Chart data={node.attrs.data} type={node.attrs.type} />
+            <button onClick={() => setIsEditing(true)}>Edit Chart</button>
+          </>
+        )}
+      </div>
+    );
+  };
+}
+```
+
+### Async Content Loading
+
+```typescript
+import { NodeExtension } from '@remirror/core';
+import { ComponentType } from 'react';
+
+class EmbedExtension extends NodeExtension {
+  get name() {
+    return 'embed' as const;
+  }
+  
+  createNodeSpec(extra, override) {
+    return {
+      group: 'block',
+      atom: true,
+      attrs: {
+        url: { default: null },
+        ...extra.defaults(),
+      },
+      parseDOM: [{
+        tag: 'div[data-embed]',
+        getAttrs: (dom) => ({
+          url: (dom as HTMLElement).getAttribute('data-url'),
+          ...extra.parse(dom),
+        }),
+      }],
+      toDOM: (node) => [
+        'div',
+        { 'data-embed': '', 'data-url': node.attrs.url, ...extra.dom(node) },
+      ],
+    };
+  }
+  
+  ReactComponent: ComponentType<NodeViewComponentProps> = ({ node }) => {
+    const [embedData, setEmbedData] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState(null);
+    
+    React.useEffect(() => {
+      fetchEmbedData(node.attrs.url)
+        .then((data) => {
+          setEmbedData(data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    }, [node.attrs.url]);
+    
+    if (loading) {
+      return <div className="embed-loading">Loading...</div>;
+    }
+    
+    if (error) {
+      return <div className="embed-error">Error: {error}</div>;
+    }
+    
+    return (
+      <div className="embed">
+        <iframe src={embedData.embedUrl} />
+      </div>
+    );
+  };
+}
+
+async function fetchEmbedData(url: string) {
+  const response = await fetch(`/api/oembed?url=${encodeURIComponent(url)}`);
+  return response.json();
+}
+```
+
+## Registering Node Views
+
+Node views can be registered in three ways:
+
+<Tabs>
+  <Tab title="In Extension">
+    ```typescript
+    class MyExtension extends NodeExtension {
+      createNodeViews(): NodeViewMethod {
+        return (node, view, getPos) => {
+          // Return node view
+        };
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Via Manager">
+    ```typescript
+    const manager = RemirrorManager.create(
+      [new MyExtension()],
+      {
+        nodeViews: {
+          myNode: (node, view, getPos) => {
+            // Custom node view
+          },
+        },
+      }
+    );
+    ```
+  </Tab>
+  
+  <Tab title="React Component">
+    ```typescript
+    class MyExtension extends NodeExtension {
+      ReactComponent: ComponentType<NodeViewComponentProps> = (props) => {
+        return <div>{/* Custom rendering */}</div>;
+      };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Performance Considerations
+
+<Tip>
+  - **Memoize expensive computations** in React components
+  - **Return `false` from `update()`** if you need to completely re-render
+  - **Use `ignoreMutation`** to prevent unnecessary re-renders
+  - **Debounce attribute updates** for frequently changing values
+  - **Lazy load** heavy components or data
+</Tip>
+
+```typescript
+const OptimizedNodeView: ComponentType<NodeViewComponentProps> = ({
+  node,
+  updateAttributes,
+}) => {
+  // Memoize expensive calculations
+  const processedData = React.useMemo(
+    () => expensiveProcess(node.attrs.data),
+    [node.attrs.data]
+  );
+  
+  // Debounce updates
+  const debouncedUpdate = React.useMemo(
+    () => debounce(updateAttributes, 300),
+    [updateAttributes]
+  );
+  
+  return <div>{/* Use processedData */}</div>;
+};
+```
+
+## Testing Node Views
+
+```typescript
+import { renderEditor } from '@remirror/testing';
+import { MyNodeExtension } from './my-node-extension';
+
+describe('MyNodeExtension', () => {
+  it('should render custom node view', () => {
+    const { view, add, nodes: { doc, myNode } } = renderEditor([
+      new MyNodeExtension(),
+    ]);
+    
+    // Add node to document
+    add(doc(myNode({ value: 'test' })));
+    
+    // Verify node view rendered
+    const nodeView = view.dom.querySelector('.my-node');
+    expect(nodeView).toBeTruthy();
+    expect(nodeView?.textContent).toContain('test');
+  });
+  
+  it('should update node view', () => {
+    const { view } = renderEditor([new MyNodeExtension()]);
+    
+    // Get node at position
+    const node = view.state.doc.nodeAt(0);
+    
+    // Update attributes
+    const tr = view.state.tr.setNodeMarkup(0, null, {
+      ...node?.attrs,
+      value: 'updated',
+    });
+    view.dispatch(tr);
+    
+    // Verify update
+    const nodeView = view.dom.querySelector('.my-node');
+    expect(nodeView?.textContent).toContain('updated');
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schemas" icon="diagram-project" href="./schemas">
+    Define node specifications and attributes
+  </Card>
+  <Card title="Commands" icon="terminal" href="./commands">
+    Create commands to manipulate nodes
+  </Card>
+  <Card title="React Components" icon="react" href="/react/components">
+    Build with Remirror's React integration
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/concepts/extensions">
+    Master extension development
+  </Card>
+</CardGroup>

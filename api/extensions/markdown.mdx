@@ -1,0 +1,340 @@
+---
+title: Markdown Extension
+description: Markdown parsing, serialization, and bidirectional conversion
+---
+
+The Markdown extension enables markdown import/export and seamless conversion between markdown and HTML.
+
+## MarkdownExtension
+
+Provides markdown support for your editor.
+
+### Installation
+
+```typescript
+import { MarkdownExtension } from 'remirror/extensions';
+
+const extensions = () => [new MarkdownExtension()];
+```
+
+### Options
+
+<ParamField path="htmlToMarkdown" type="(html: string) => string">
+  Custom HTML to markdown converter
+  
+  ```typescript
+  import TurndownService from 'turndown';
+  
+  const turndown = new TurndownService();
+  
+  new MarkdownExtension({
+    htmlToMarkdown: (html) => turndown.turndown(html),
+  })
+  ```
+</ParamField>
+
+<ParamField path="markdownToHtml" type="(markdown: string, sanitizer?: (html: string) => string) => string">
+  Custom markdown to HTML converter
+  
+  ```typescript
+  import { marked } from 'marked';
+  
+  new MarkdownExtension({
+    markdownToHtml: (markdown) => marked(markdown),
+  })
+  ```
+</ParamField>
+
+<ParamField path="htmlSanitizer" type="(html: string) => string">
+  Sanitize HTML to prevent XSS attacks
+  
+  ```typescript
+  import DOMPurify from 'dompurify';
+  
+  new MarkdownExtension({
+    htmlSanitizer: (html) => DOMPurify.sanitize(html),
+  })
+  ```
+</ParamField>
+
+<ParamField path="copyAsMarkdown" type="boolean" default="false">
+  Copy editor content as markdown instead of HTML
+  
+  ```typescript
+  new MarkdownExtension({ copyAsMarkdown: true })
+  ```
+</ParamField>
+
+<ParamField path="activeNodes" type="string[]" default="['code']">
+  Nodes where markdown shortcuts are active
+  
+  ```typescript
+  new MarkdownExtension({ 
+    activeNodes: ['code', 'codeBlock'] 
+  })
+  ```
+</ParamField>
+
+---
+
+## Commands
+
+### `insertMarkdown(markdown, options?)`
+
+Insert markdown content into the editor.
+
+<ParamField path="markdown" type="string" required>
+  Markdown string to insert
+</ParamField>
+
+<ParamField path="options.selection" type="PrimitiveSelection">
+  Where to insert the markdown
+</ParamField>
+
+<ParamField path="options.alwaysWrapInBlock" type="boolean">
+  Always wrap content in a block element
+</ParamField>
+
+```typescript
+// Insert inline markdown
+commands.insertMarkdown('**bold text**');
+
+// Insert block markdown
+commands.insertMarkdown('# Heading\n\nParagraph text');
+
+// Always wrap in block
+commands.insertMarkdown('**bold**', { alwaysWrapInBlock: true });
+// Results in: <p><strong>bold</strong></p>
+```
+
+---
+
+## Helpers
+
+### `getMarkdown(state?)`
+
+Get the current document as markdown.
+
+```typescript
+const markdown = helpers.getMarkdown();
+console.log(markdown);
+// # My Document
+// 
+// This is a paragraph with **bold** text.
+```
+
+---
+
+## String Handler
+
+The extension registers a `markdown` string handler:
+
+```typescript
+import { useRemirror } from '@remirror/react';
+
+const { manager } = useRemirror({
+  extensions: () => [new MarkdownExtension()],
+  
+  // Use markdown as content
+  stringHandler: 'markdown',
+  content: '# Hello\n\nThis is **markdown**',
+});
+```
+
+---
+
+## Usage Examples
+
+### Basic Markdown Editor
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { MarkdownExtension } from 'remirror/extensions';
+import { useState } from 'react';
+
+function MarkdownEditor() {
+  const [markdown, setMarkdown] = useState('# Hello World\n\nEdit me!');
+  
+  const { manager } = useRemirror({
+    extensions: () => [new MarkdownExtension()],
+    stringHandler: 'markdown',
+    content: markdown,
+    
+    // Update markdown on change
+    onChange: ({ helpers }) => {
+      setMarkdown(helpers.getMarkdown());
+    },
+  });
+
+  return (
+    <div>
+      <Remirror manager={manager} />
+      
+      {/* Show markdown preview */}
+      <pre>{markdown}</pre>
+    </div>
+  );
+}
+```
+
+### With Custom Converters
+
+```tsx
+import { MarkdownExtension } from 'remirror/extensions';
+import { marked } from 'marked';
+import TurndownService from 'turndown';
+import DOMPurify from 'dompurify';
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+});
+
+const extensions = () => [
+  new MarkdownExtension({
+    // Custom markdown to HTML
+    markdownToHtml: (markdown) => {
+      return marked(markdown);
+    },
+    
+    // Custom HTML to markdown
+    htmlToMarkdown: (html) => {
+      return turndown.turndown(html);
+    },
+    
+    // Sanitize HTML
+    htmlSanitizer: (html) => {
+      return DOMPurify.sanitize(html);
+    },
+    
+    // Copy as markdown
+    copyAsMarkdown: true,
+  }),
+];
+```
+
+### Import/Export Markdown
+
+```tsx
+function MarkdownImportExport() {
+  const { manager } = useRemirror({
+    extensions: () => [new MarkdownExtension()],
+  });
+
+  const importMarkdown = (markdown: string) => {
+    manager.commands.insertMarkdown(markdown);
+  };
+
+  const exportMarkdown = () => {
+    const markdown = manager.helpers.getMarkdown();
+    
+    // Download as file
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'document.md';
+    a.click();
+  };
+
+  const importFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const markdown = e.target?.result as string;
+      importMarkdown(markdown);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div>
+      <button onClick={exportMarkdown}>Export Markdown</button>
+      <input 
+        type="file" 
+        accept=".md,.markdown" 
+        onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])}
+      />
+      <Remirror manager={manager} />
+    </div>
+  );
+}
+```
+
+---
+
+## Copy as Markdown
+
+When `copyAsMarkdown: true`, copied content is in markdown format:
+
+```typescript
+new MarkdownExtension({ copyAsMarkdown: true });
+
+// When user copies:
+// "This is **bold** text"
+// 
+// Clipboard contains markdown, not HTML
+```
+
+This is useful when copying to plain text editors that understand markdown.
+
+---
+
+## Supported Markdown
+
+The extension supports CommonMark markdown:
+
+### Inline Formatting
+- `**bold**` or `__bold__` - Bold
+- `*italic*` or `_italic_` - Italic
+- `` `code` `` - Inline code
+- `~~strikethrough~~` - Strikethrough
+- `[link](url)` - Links
+
+### Block Elements
+- `# Heading 1` through `###### Heading 6`
+- `> Blockquote`
+- ``` ``` ``` - Code blocks
+- `---` - Horizontal rules
+- `* List item` or `- List item` - Bullet lists
+- `1. List item` - Ordered lists
+- `- [ ] Task` - Task lists
+
+### Tables
+```markdown
+| Header 1 | Header 2 |
+|----------|----------|
+| Cell 1   | Cell 2   |
+```
+
+---
+
+## Default Converters
+
+By default, the extension uses:
+
+- **HTML to Markdown**: Custom converter based on TurndownService
+- **Markdown to HTML**: Custom converter using marked
+
+You can override these with the `htmlToMarkdown` and `markdownToHtml` options.
+
+---
+
+## Security
+
+**Important**: Always sanitize HTML when converting from markdown to prevent XSS attacks:
+
+```typescript
+import DOMPurify from 'dompurify';
+
+new MarkdownExtension({
+  htmlSanitizer: (html) => DOMPurify.sanitize(html),
+});
+```
+
+---
+
+## Related
+
+- [Code Extension](/api/extensions/code)
+- [Text Formatting](/api/extensions/text-formatting)
+- [Block Elements](/api/extensions/block-elements)

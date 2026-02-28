@@ -1,0 +1,567 @@
+---
+title: RemirrorManager
+description: Deep dive into the RemirrorManager lifecycle, store, and orchestration of extensions
+---
+
+# RemirrorManager
+
+The `RemirrorManager` is the central orchestrator in Remirror. It brings together extensions, manages their lifecycle, creates the ProseMirror schema, and provides unified access to commands and helpers.
+
+<Info>
+  Think of the manager as the "conductor" of your editor orchestra—it coordinates all extensions and ensures they work together harmoniously.
+</Info>
+
+## Creating a Manager
+
+There are several ways to create a manager:
+
+<Tabs>
+  <Tab title="Basic Creation">
+    Use `RemirrorManager.create()` with an array of extensions:
+    
+    ```typescript
+    import { RemirrorManager } from 'remirror';
+    import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+    
+    const manager = RemirrorManager.create([
+      new BoldExtension(),
+      new ItalicExtension(),
+    ]);
+    ```
+    
+    The builtin preset is automatically included, so you get essential functionality like schema creation and command management.
+  </Tab>
+  
+  <Tab title="Lazy Initialization">
+    Pass a function that returns extensions for lazy initialization:
+    
+    ```typescript
+    const manager = RemirrorManager.create(() => [
+      new BoldExtension(),
+      new ItalicExtension(),
+    ]);
+    ```
+    
+    Useful when extensions need to be created dynamically or when initialization is expensive.
+  </Tab>
+  
+  <Tab title="With Settings">
+    Configure the manager with settings:
+    
+    ```typescript
+    import { ExtensionPriority } from 'remirror';
+    
+    const manager = RemirrorManager.create(
+      [
+        new BoldExtension(),
+        new LinkExtension(),
+      ],
+      {
+        // Configure builtin extensions
+        builtin: {
+          exitMarksOnArrowPress: true,
+          persistentSelectionClass: 'selection',
+        },
+        
+        // Override extension priorities
+        priority: {
+          link: ExtensionPriority.High,
+        },
+        
+        // Add extra attributes to nodes/marks
+        extraAttributes: [
+          {
+            identifiers: ['paragraph'],
+            attributes: {
+              id: { default: null },
+            },
+          },
+        ],
+      }
+    );
+    ```
+  </Tab>
+  
+  <Tab title="Core Manager">
+    Use `createCoreManager` for vanilla JS editors:
+    
+    ```typescript
+    import { createCoreManager } from '@remirror/preset-core';
+    import { BoldExtension } from 'remirror/extensions';
+    
+    const manager = createCoreManager(
+      () => [new BoldExtension()],
+      {
+        core: {
+          excludeExtensions: [],
+        },
+      }
+    );
+    ```
+    
+    This automatically includes the core preset (Doc, Text, Paragraph, History, etc.).
+    
+    <Note>
+      The React integration (`@remirror/react`) uses `createCoreManager` internally.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Manager Lifecycle
+
+The manager progresses through distinct phases:
+
+```typescript
+import { ManagerPhase } from 'remirror';
+
+enum ManagerPhase {
+  None = 0,        // Before construction
+  Create = 1,      // During construction, onCreate called
+  EditorView = 2,  // View attached, onView called
+  Runtime = 3,     // Normal operation
+  Destroy = 4,     // Cleanup, onDestroy called
+}
+```
+
+### Phase 1: Creation
+
+When you call `RemirrorManager.create()`, the manager:
+
+1. **Combines extensions** - Merges user extensions with builtin preset
+2. **Sorts by priority** - Orders extensions by priority (highest first)
+3. **Validates** - Ensures no duplicate extension names
+4. **Calls onCreate** - Triggers extension `onCreate` lifecycle methods
+5. **Creates schema** - The `SchemaExtension` builds the ProseMirror schema
+6. **Initializes store** - Sets up the extension store
+
+```typescript
+const manager = RemirrorManager.create([
+  new BoldExtension(),
+]);
+
+// At this point:
+console.log(manager.store.schema); // ✅ Schema available
+console.log(manager.store.view);   // ❌ View not yet available
+console.log(manager.mounted);      // false
+```
+
+<Info>
+  After creation, the schema is available but the view is not. Extensions can access `this.store.schema` in `onCreate` but not `this.store.view`.
+</Info>
+
+### Phase 2: View Attachment
+
+The view is attached by the framework (React, Vue, etc.) or manually:
+
+```typescript
+import { EditorState } from '@remirror/pm/state';
+import { EditorView } from '@remirror/pm/view';
+
+// Create initial state
+const state = EditorState.create({
+  schema: manager.store.schema,
+});
+
+// Attach view
+const view = new EditorView(document.querySelector('#editor'), {
+  state,
+});
+
+manager.addView(view);
+
+// Now:
+console.log(manager.mounted);           // true
+console.log(manager.store.view);        // ✅ View available
+console.log(manager.store.commands);    // ✅ Commands available
+console.log(manager.store.helpers);     // ✅ Helpers available
+```
+
+During view attachment, the manager:
+
+1. **Stores view reference** - Makes view available in store
+2. **Calls onView** - Triggers extension `onView` lifecycle methods
+3. **Collects commands** - Aggregates commands from all extensions
+4. **Collects helpers** - Aggregates helpers from all extensions
+5. **Enters runtime phase** - Manager is now fully operational
+
+<Tip>
+  With `@remirror/react`, view attachment happens automatically when the `<Remirror>` component mounts.
+</Tip>
+
+### Phase 3: Runtime
+
+During normal operation:
+
+```typescript
+// Execute commands
+manager.store.commands.toggleBold();
+manager.store.commands.insertText('Hello world');
+
+// Query state with helpers
+const isEmpty = manager.store.helpers.isSelectionEmpty();
+const isBold = manager.store.helpers.isBoldActive();
+
+// Chain commands
+manager.store.chain
+  .selectText('all')
+  .toggleBold()
+  .focus()
+  .run();
+
+// Access view directly
+manager.store.view.focus();
+
+// Get current state
+const state = manager.store.view.state;
+```
+
+Every state change triggers `onStateUpdate` in all extensions:
+
+```typescript
+class MyExtension extends PlainExtension {
+  onStateUpdate({ state, previousState, tr }) {
+    // React to state changes
+    if (tr?.docChanged) {
+      console.log('Document changed');
+    }
+  }
+}
+```
+
+### Phase 4: Destruction
+
+When cleaning up:
+
+```typescript
+manager.destroy();
+
+// Manager is now destroyed:
+console.log(manager.destroyed);  // true
+console.log(manager.mounted);    // false
+```
+
+During destruction, the manager:
+
+1. **Calls onDestroy** - Extensions clean up resources
+2. **Removes event listeners** - Prevents memory leaks
+3. **Clears store** - Releases references
+4. **Destroys view** - If still attached
+
+<Warning>
+  After destruction, the manager cannot be reused. Create a new manager if needed.
+</Warning>
+
+## The Extension Store
+
+The store is the communication hub between extensions:
+
+```typescript
+interface ExtensionStore {
+  // Available after onCreate
+  schema: EditorSchema;
+  extensions: AnyExtension[];
+  manager: RemirrorManager;
+  tags: CombinedTags;
+  
+  // Available after onView
+  view: EditorView;
+  commands: Record<string, CommandFunction>;
+  helpers: Record<string, HelperFunction>;
+  chain: ChainedCommands;
+  
+  // Available after framework attachment
+  getState: () => EditorState;
+  setState: (state: EditorState) => void;
+}
+```
+
+### Accessing the Store
+
+From extensions:
+
+```typescript
+class MyExtension extends PlainExtension {
+  onCreate() {
+    // Access schema
+    const { nodes, marks } = this.store.schema;
+  }
+  
+  onView(view: EditorView) {
+    // Access everything
+    this.store.commands.toggleBold();
+    const isEmpty = this.store.helpers.isSelectionEmpty();
+  }
+}
+```
+
+From outside:
+
+```typescript
+const store = manager.store;
+
+// Execute commands
+store.commands.toggleBold();
+
+// Query state
+const isBold = store.helpers.isBoldActive();
+
+// Access schema
+const paragraphType = store.schema.nodes.paragraph;
+
+// Access view
+store.view.focus();
+```
+
+<Tip>
+  The store is frozen (read-only) to prevent accidental mutations. This ensures predictability and debuggability.
+</Tip>
+
+## Commands
+
+Commands are actions that modify the editor state:
+
+### Using Commands
+
+```typescript
+// Toggle formatting
+manager.store.commands.toggleBold();
+manager.store.commands.toggleItalic();
+
+// Insert content
+manager.store.commands.insertText('Hello!');
+manager.store.commands.insertNode({
+  type: 'paragraph',
+  content: [{ type: 'text', text: 'New paragraph' }],
+});
+
+// Manipulate selection
+manager.store.commands.selectText('all');
+manager.store.commands.focus('start');
+
+// Check if enabled
+if (manager.store.commands.toggleBold.enabled()) {
+  console.log('Bold command is available');
+}
+```
+
+### Chaining Commands
+
+Chain multiple commands together:
+
+```typescript
+manager.store.chain
+  .selectText({ from: 0, to: 10 })
+  .toggleBold()
+  .toggleItalic()
+  .insertText(' - edited')
+  .focus('end')
+  .run(); // Execute the chain
+
+// Check if chain is enabled
+const canRun = manager.store.chain
+  .toggleBold()
+  .toggleItalic()
+  .enabled();
+```
+
+<Info>
+  Chained commands are not executed until `.run()` is called. This allows you to build complex operations and execute them atomically.
+</Info>
+
+## Helpers
+
+Helpers query editor state without modifying it:
+
+```typescript
+// Check active marks
+const isBold = manager.store.helpers.isBoldActive();
+const isItalic = manager.store.helpers.isItalicActive();
+
+// Query selection
+const isEmpty = manager.store.helpers.isSelectionEmpty();
+const text = manager.store.helpers.getSelectedText();
+
+// Get node at position
+const node = manager.store.helpers.getNodeAt(10);
+
+// Check document state
+const wordCount = manager.store.helpers.getWordCount();
+```
+
+Helpers never modify state and are safe to call repeatedly.
+
+## Event System
+
+Subscribe to manager events:
+
+```typescript
+import { RemirrorEventListener } from 'remirror';
+
+const listener: RemirrorEventListener<Extension> = {
+  stateUpdate: ({ state, previousState, tr }) => {
+    console.log('State updated');
+  },
+  
+  destroy: () => {
+    console.log('Manager destroyed');
+  },
+};
+
+const unsubscribe = manager.addListener('stateUpdate', listener.stateUpdate);
+
+// Later
+unsubscribe();
+```
+
+Available events:
+- `stateUpdate` - Editor state changed
+- `destroy` - Manager destroyed
+- `updated` - Generic update event
+
+## Framework Output
+
+The manager provides framework-specific output:
+
+```typescript
+// Wait for framework attachment
+const output = manager.output;
+
+if (output) {
+  // Access framework-specific methods
+  output.getState();  // Current state
+  output.setState(newState);  // Update state
+}
+```
+
+<Note>
+  `manager.output` is undefined until a framework (React, etc.) attaches to the manager. In React, this happens after the first render of `<Remirror>`.
+</Note>
+
+### React Integration
+
+```tsx
+import { useRemirror, Remirror } from '@remirror/react';
+
+function Editor() {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+  
+  // manager.output is available here after first render
+  
+  return <Remirror manager={manager} initialContent={state} />;
+}
+```
+
+## Manager Settings
+
+Configure manager behavior:
+
+```typescript
+interface ManagerSettings {
+  /**
+   * Configure builtin extensions
+   */
+  builtin?: {
+    exitMarksOnArrowPress?: boolean;
+    persistentSelectionClass?: string;
+    // ... more options
+  };
+  
+  /**
+   * Override extension priorities
+   */
+  priority?: Record<string, ExtensionPriority>;
+  
+  /**
+   * Add extra attributes to nodes/marks
+   */
+  extraAttributes?: ExtraAttributes[];
+  
+  /**
+   * Custom string handlers (HTML, markdown, etc.)
+   */
+  stringHandler?: StringHandler;
+}
+```
+
+### Extra Attributes
+
+Add custom attributes to schema:
+
+```typescript
+const manager = RemirrorManager.create(
+  [new ParagraphExtension()],
+  {
+    extraAttributes: [
+      {
+        // Add to specific node
+        identifiers: ['paragraph'],
+        attributes: {
+          id: {
+            default: null,
+            parseDOM: (node) => node.getAttribute('data-id'),
+            toDOM: (attrs) => ['data-id', attrs.id],
+          },
+        },
+      },
+      {
+        // Add to all nodes
+        identifiers: 'nodes',
+        attributes: {
+          class: { default: null },
+        },
+      },
+    ],
+  }
+);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Manager Lifecycle">
+    - Create manager once, reuse throughout app lifecycle
+    - Don't create new managers on every render
+    - Call `destroy()` when unmounting to prevent memory leaks
+    - Check `manager.mounted` before accessing view
+  </Accordion>
+  
+  <Accordion title="Store Access">
+    - Access store via `manager.store` from outside extensions
+    - Access store via `this.store` from inside extensions
+    - Check availability of store properties based on lifecycle phase
+    - Don't mutate the store (it's frozen)
+  </Accordion>
+  
+  <Accordion title="Commands vs Helpers">
+    - Use commands to modify state
+    - Use helpers to query state
+    - Chain commands for complex operations
+    - Don't perform side effects in helpers
+  </Accordion>
+  
+  <Accordion title="Event Listeners">
+    - Always unsubscribe from events to prevent memory leaks
+    - Use extension lifecycle methods when possible instead of events
+    - Keep event handlers lightweight
+    - Avoid heavy computations in `stateUpdate` listeners
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extensions" icon="puzzle-piece" href="./extensions">
+    Learn about extension lifecycle methods
+  </Card>
+  <Card title="State Management" icon="database" href="./state-management">
+    Understand state flow and updates
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="./architecture">
+    Explore the full architecture
+  </Card>
+  <Card title="Presets" icon="layer-group" href="./presets">
+    Compose extensions with presets
+  </Card>
+</CardGroup>

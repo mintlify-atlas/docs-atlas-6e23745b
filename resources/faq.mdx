@@ -1,0 +1,128 @@
+---
+title: FAQ
+description: Frequently asked questions about working with Remirror editors
+---
+
+Find answers to common questions about using Remirror. If you need more help, join our [Discord community](https://remirror.io/chat).
+
+## Content Management
+
+<AccordionGroup>
+  <Accordion title="How do I get the content of the editor as HTML?">
+    Use the built-in conversion methods from `remirror/core`:
+
+    **Convert ProseMirror to HTML:**
+    ```tsx
+    import { prosemirrorNodeToHtml } from 'remirror';
+
+    const htmlString = prosemirrorNodeToHtml(state.doc);
+    ```
+
+    **Convert HTML to ProseMirror:**
+    ```tsx
+    import { htmlToProsemirrorNode } from 'remirror';
+
+    const doc = htmlToProsemirrorNode({ 
+      content: html, 
+      schema: state.schema 
+    });
+    ```
+
+    <Warning>
+      These methods do not sanitize HTML. Consider using a library like [xss](https://github.com/leizongmin/js-xss) for sanitization.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="How do I replace the content in the editor?">
+    Choose the method based on whether you want to preserve or clear the undo history.
+
+    ### Preserve History
+
+    Users can undo the change (Ctrl+Z) to get back to the old state:
+
+    ```tsx
+    import { useRemirror } from '@remirror/react';
+
+    function ReplaceContentPreserveHistory() {
+      const { setContent } = useRemirror();
+
+      const handleReplace = () => {
+        setContent('<p>New content here</p>');
+      };
+
+      return <button onClick={handleReplace}>Replace Content</button>;
+    }
+    ```
+
+    <Info>
+      Calling `setContent(...)` preserves the editor history.
+    </Info>
+
+    ### Clear History
+
+    Replace the complete editor state, including history:
+
+    ```tsx
+    import { useRemirror } from '@remirror/react';
+
+    function ReplaceContentClearHistory() {
+      const { manager } = useRemirror();
+
+      const handleReplace = () => {
+        const newState = manager.createState({
+          content: '<p>New content here</p>',
+        });
+        manager.view.updateState(newState);
+      };
+
+      return <button onClick={handleReplace}>Replace Content</button>;
+    }
+    ```
+
+    <Info>
+      Calling `manager.view.updateState(...)` replaces the complete state.
+    </Info>
+
+    ### Outside Editor Context
+
+    Use an imperative handle to replace content from outside:
+
+    ```tsx
+    import { useRef } from 'react';
+    import { Remirror, useRemirror } from '@remirror/react';
+    import type { RemirrorJSON } from 'remirror';
+
+    function App() {
+      const editorRef = useRef(null);
+
+      const handleReplace = () => {
+        editorRef.current?.setContent('<p>New content</p>');
+      };
+
+      return (
+        <>
+          <button onClick={handleReplace}>Replace</button>
+          <Remirror ref={editorRef}>
+            {/* editor content */}
+          </Remirror>
+        </>
+      );
+    }
+    ```
+
+    <Tip>
+      Imperative handles are useful when you need to control the editor from parent components.
+    </Tip>
+  </Accordion>
+</AccordionGroup>
+
+## Need More Help?
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://remirror.io/chat">
+    Join our Discord server for real-time support and discussions
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/remirror/remirror/issues">
+    Report bugs or request features on GitHub
+  </Card>
+</CardGroup>

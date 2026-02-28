@@ -1,0 +1,320 @@
+---
+title: Building a Custom Editor
+description: Learn how to build a custom Remirror editor from scratch with extensions, commands, and UI components
+---
+
+# Building a Custom Editor
+
+This guide walks you through building a custom rich text editor with Remirror, from basic setup to adding custom UI components.
+
+## Installation
+
+First, install the required packages:
+
+```bash
+npm add remirror @remirror/react @remirror/pm @emotion/react @emotion/styled
+```
+
+## Basic Editor Setup
+
+<Steps>
+  <Step title="Create the Manager">
+    The `RemirrorManager` composes your extensions and provides the core functionality. Use the `useRemirror` hook to create it:
+
+    ```tsx
+    import { useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    export const MyEditor = () => {
+      const { manager, state } = useRemirror({
+        extensions: () => [new BoldExtension()],
+        content: '<p>I love <b>Remirror</b></p>',
+        selection: 'start',
+        stringHandler: 'html',
+      });
+    };
+    ```
+
+    The `extensions` function returns an array of extension instances. The `stringHandler` tells Remirror how to parse the initial content.
+  </Step>
+
+  <Step title="Render the Editor Component">
+    Wrap your editor with the `remirror-theme` class and render the `Remirror` component:
+
+    ```tsx
+    import 'remirror/styles/all.css';
+    import { Remirror, useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    export const MyEditor = () => {
+      const { manager, state } = useRemirror({
+        extensions: () => [new BoldExtension()],
+        content: '<p>I love <b>Remirror</b></p>',
+        selection: 'start',
+        stringHandler: 'html',
+      });
+
+      return (
+        <div className='remirror-theme'>
+          <Remirror manager={manager} initialContent={state} />
+        </div>
+      );
+    };
+    ```
+
+    <Note>
+      The `className='remirror-theme'` is essential - it defines CSS variables necessary for the editor styling.
+    </Note>
+  </Step>
+
+  <Step title="Add Custom UI Components">
+    When you provide children to the `Remirror` component, you take full control of the UI:
+
+    ```tsx
+    import { EditorComponent, Remirror, useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    const Menu = () => <button onClick={() => alert('TBD')}>B</button>;
+
+    export const MyEditor = () => {
+      const { manager, state } = useRemirror({
+        extensions: () => [new BoldExtension()],
+        content: '<p>I love <b>Remirror</b></p>',
+        selection: 'start',
+        stringHandler: 'html',
+      });
+
+      return (
+        <div className='remirror-theme'>
+          <Remirror manager={manager} initialContent={state}>
+            <EditorComponent />
+            <Menu />
+          </Remirror>
+        </div>
+      );
+    };
+    ```
+
+    <Tip>
+      The `EditorComponent` was automatically rendered before, but now you render it explicitly for full control over DOM structure.
+    </Tip>
+  </Step>
+</Steps>
+
+## Adding Commands and Interactions
+
+Commands are the only way to modify a Remirror document. Use the `useCommands` hook to access them:
+
+```tsx
+import { useCommands, useActive } from '@remirror/react';
+
+const Menu = () => {
+  const { toggleBold, focus } = useCommands();
+  const active = useActive();
+
+  return (
+    <button
+      onClick={() => {
+        toggleBold();
+        focus();
+      }}
+      style={{ fontWeight: active.bold() ? 'bold' : undefined }}
+    >
+      B
+    </button>
+  );
+};
+```
+
+### Command Chaining
+
+For more complex interactions, use chained commands:
+
+```tsx
+import { useChainedCommands, useActive } from '@remirror/react';
+
+const Menu = () => {
+  const chain = useChainedCommands();
+  const active = useActive();
+
+  return (
+    <button
+      onClick={() => {
+        chain
+          .toggleBold()
+          .focus()
+          .run(); // Always terminate chains with .run()
+      }}
+      style={{ fontWeight: active.bold() ? 'bold' : undefined }}
+    >
+      B
+    </button>
+  );
+};
+```
+
+### Checking Command Availability
+
+Commands may not be available in all contexts. Check if a command is enabled:
+
+```tsx
+const Menu = () => {
+  const { toggleBold } = useCommands();
+
+  return (
+    <button 
+      onClick={() => toggleBold()} 
+      disabled={!toggleBold.enabled()}
+    >
+      B
+    </button>
+  );
+};
+```
+
+<Note>
+  Commands return `true` or `false` to indicate whether they're enabled. When checking `.enabled()`, the command executes without modifying the document.
+</Note>
+
+## Using the WYSIWYG Preset
+
+For a full-featured editor, use the `wysiwygPreset` which includes many extensions:
+
+```tsx
+import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
+
+const App = () => {
+  return (
+    <div style={{ padding: 16 }}>
+      <WysiwygEditor placeholder='Enter text...' />
+    </div>
+  );
+};
+```
+
+The WYSIWYG preset includes:
+- **Formatting**: Bold, Italic, Underline, Strike, Code
+- **Blocks**: Headings, Blockquote, Code Block, Horizontal Rule
+- **Lists**: Bullet, Ordered, Task Lists
+- **Media**: Images, Iframes
+- **Links**: Auto-linking support
+- **Utilities**: Find & Replace, Gap Cursor, Drop Cursor, Trailing Node
+
+## Accessing Helpers
+
+Helpers allow you to read state from the document:
+
+```tsx
+import { useHelpers, useKeymap } from '@remirror/react';
+import { useCallback } from 'react';
+
+const hooks = [
+  () => {
+    const { getJSON } = useHelpers();
+
+    const handleSaveShortcut = useCallback(
+      ({ state }) => {
+        console.log(`Save to backend: ${JSON.stringify(getJSON(state))}`);
+        return true;
+      },
+      [getJSON],
+    );
+
+    useKeymap('Mod-s', handleSaveShortcut);
+  },
+];
+
+const Editor = () => {
+  const { manager, state } = useRemirror({ 
+    extensions: () => [new BoldExtension()] 
+  });
+
+  return <Remirror manager={manager} initialContent={state} hooks={hooks} />;
+};
+```
+
+<Tip>
+  `Mod` is a platform-agnostic modifier key: `Ctrl` on Windows/Linux, `Cmd` on macOS.
+</Tip>
+
+## Common Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `getJSON()` | Returns JSON representation of the document |
+| `getText()` | Returns plain text with line breaks maintained |
+| `getHTML()` | Returns HTML representation using schema toDOM |
+| `getMarkdown()` | Returns Markdown (requires markdown extension) |
+
+## Working with Data
+
+### Extracting Content
+
+Use the `OnChangeJSON` component to capture document changes:
+
+```tsx
+import { useCallback } from 'react';
+import type { RemirrorJSON } from 'remirror';
+import { OnChangeJSON } from '@remirror/react';
+import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
+
+const STORAGE_KEY = 'remirror-editor-content';
+
+const App = () => {
+  const handleEditorChange = useCallback((json: RemirrorJSON) => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+  }, []);
+
+  return (
+    <div style={{ padding: 16 }}>
+      <WysiwygEditor placeholder='Enter text...'>
+        <OnChangeJSON onChange={handleEditorChange} />
+      </WysiwygEditor>
+    </div>
+  );
+};
+```
+
+<Tip>
+  Using **JSON** is recommended as it's simpler for data migrations and search operations compared to HTML.
+</Tip>
+
+### Setting Initial Content
+
+Load saved content by passing it to `initialContent`:
+
+```tsx
+import { useState } from 'react';
+import type { RemirrorJSON } from 'remirror';
+
+const App = () => {
+  const [initialContent] = useState<RemirrorJSON | undefined>(() => {
+    const content = window.localStorage.getItem(STORAGE_KEY);
+    return content ? JSON.parse(content) : undefined;
+  });
+
+  return (
+    <WysiwygEditor 
+      placeholder='Enter text...' 
+      initialContent={initialContent}
+    />
+  );
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Working with Extensions" icon="puzzle-piece" href="/guides/working-with-extensions">
+    Learn how to configure and create custom extensions
+  </Card>
+  <Card title="Styling Your Editor" icon="palette" href="/guides/styling">
+    Customize the appearance of your editor
+  </Card>
+  <Card title="Controlled Editor" icon="sliders" href="/guides/controlled-editor">
+    Take complete control over editor state
+  </Card>
+  <Card title="Collaboration" icon="users" href="/guides/collaboration">
+    Add real-time collaborative editing
+  </Card>
+</CardGroup>

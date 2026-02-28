@@ -1,0 +1,502 @@
+---
+title: Controlled Editor
+description: Learn how to create a controlled Remirror editor with complete control over editor state
+---
+
+# Controlled Editor
+
+Controlled editors give you complete control over the editor's state, similar to controlled inputs in React. This is useful when you need to:
+
+- Intercept and modify state updates
+- Synchronize with external state management
+- Implement custom undo/redo logic
+- Debug state changes
+
+<Warning>
+  Controlled editors are more complex due to the asynchronous nature of React updates versus the synchronous nature of ProseMirror. If you're new to Remirror, start with uncontrolled editors.
+</Warning>
+
+## Uncontrolled vs Controlled
+
+<Tabs>
+  <Tab title="Uncontrolled (Default)">
+    The editor manages its own state internally:
+
+    ```tsx
+    import { Remirror, useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    const UncontrolledEditor = () => {
+      const { manager } = useRemirror({ 
+        extensions: () => [new BoldExtension()] 
+      });
+
+      return <Remirror manager={manager} />;
+    };
+    ```
+
+    The editor handles all state updates automatically.
+  </Tab>
+
+  <Tab title="Controlled">
+    You control the state explicitly:
+
+    ```tsx
+    import { Remirror, useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    const ControlledEditor = () => {
+      const { manager, state, setState } = useRemirror({
+        extensions: () => [new BoldExtension()],
+        content: '<p>Initial content</p>',
+        stringHandler: 'html',
+      });
+
+      return (
+        <Remirror
+          manager={manager}
+          state={state}
+          onChange={(parameter) => {
+            setState(parameter.state);
+          }}
+        />
+      );
+    };
+    ```
+
+    You receive and apply state updates manually.
+  </Tab>
+</Tabs>
+
+## Creating a Controlled Editor
+
+<Steps>
+  <Step title="Extract state and setState from useRemirror">
+    The `useRemirror` hook provides `state` and `setState` for controlled mode:
+
+    ```tsx
+    import { useRemirror } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+
+    const { manager, state, setState } = useRemirror({
+      extensions: () => [new BoldExtension()],
+      stringHandler: 'html',
+      content: '<p>This is the initial value</p>',
+    });
+    ```
+
+    <Note>
+      The `content` is only used to create the initial state. It's never referred to again after the first render.
+    </Note>
+  </Step>
+
+  <Step title="Pass state and onChange to Remirror">
+    Provide both `state` and `onChange` to make the editor controlled:
+
+    ```tsx
+    return (
+      <Remirror
+        manager={manager}
+        state={state}
+        onChange={(parameter) => {
+          setState(parameter.state);
+        }}
+      />
+    );
+    ```
+
+    When both props are provided, the editor enters controlled mode.
+  </Step>
+
+  <Step title="Handle state updates">
+    The `onChange` callback receives updated state that you must apply:
+
+    ```tsx
+    onChange={(parameter) => {
+      // parameter.state: The new editor state
+      // parameter.tr: The transaction that created this state
+      // parameter.previousState: The previous state
+      
+      setState(parameter.state);
+    }}
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+```tsx
+import React from 'react';
+import { BoldExtension } from 'remirror/extensions';
+import { Remirror, useRemirror } from '@remirror/react';
+
+const extensions = () => [new BoldExtension()];
+
+const ControlledEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions,
+    stringHandler: 'html',
+    content: '<p>This is the initial value</p>',
+  });
+
+  return (
+    <Remirror
+      autoRender='start'
+      manager={manager}
+      state={state}
+      onChange={(parameter) => {
+        // Update the state to the latest value
+        setState(parameter.state);
+      }}
+    />
+  );
+};
+```
+
+## Intercepting State Changes
+
+The power of controlled editors is intercepting and modifying updates:
+
+```tsx
+const InterceptingEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+    stringHandler: 'html',
+    content: '<p>Type something...</p>',
+  });
+
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={(parameter) => {
+        let nextState = parameter.state;
+
+        // Check if the document content changed
+        if (parameter.tr?.docChanged) {
+          // Insert text after every change
+          const tr = state.tr.insertText(' NO!!!');
+          nextState = state.apply(tr);
+        }
+
+        // Update the state
+        setState(nextState);
+      }}
+    />
+  );
+};
+```
+
+<Tip>
+  Access `parameter.tr.docChanged` to check if the document content was modified (vs. just selection changes).
+</Tip>
+
+## Using the onChange Helper
+
+For simpler cases where you just need state access, use the `onChange` property from `useRemirror`:
+
+```tsx
+import React from 'react';
+import { BoldExtension } from 'remirror/extensions';
+import { Remirror, useRemirror } from '@remirror/react';
+
+const extensions = () => [new BoldExtension()];
+
+const Editor = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions,
+    stringHandler: 'html',
+    content: '<p>This is the initial value</p>',
+  });
+
+  // onChange automatically calls setState internally
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={onChange}
+    />
+  );
+};
+```
+
+This provides controlled behavior without manually calling `setState`.
+
+## Potential Pitfalls
+
+### The Synchronous Command Problem
+
+In controlled editors, there's often a delay between `view.dispatch` and the state being updated. This causes issues with multiple synchronous commands:
+
+```tsx
+// ❌ This won't work as expected in controlled editors
+const handleClick = () => {
+  commands.toggleBold();
+  commands.toggleItalic(); // Operates on same state as toggleBold
+  commands.toggleUnderline(); // Last command wins
+};
+```
+
+Each command operates on the current state, not the state after the previous command. The last update wins.
+
+<Warning>
+  Multiple synchronous commands in controlled editors will not work as expected. Use chained commands instead.
+</Warning>
+
+### The Solution: Chained Commands
+
+Use `useChainedCommands` to compose commands that work with transactions:
+
+```tsx
+import { useChainedCommands } from '@remirror/react';
+
+const ChainedButton = () => {
+  const chained = useChainedCommands();
+
+  return (
+    <button 
+      onClick={() => 
+        chained
+          .toggleBold()
+          .toggleItalic()
+          .toggleUnderline()
+          .run() // Must call .run() to execute
+      }
+    >
+      Format
+    </button>
+  );
+};
+```
+
+Chained commands work with the ProseMirror `transaction` instead of fixed state, so each command builds on the previous one.
+
+### Non-Chainable Commands
+
+Some commands cannot be chained:
+
+- `undo` - Only works with synchronous state updates
+- `redo` - Only works with synchronous state updates
+
+These commands will throw an error when used in chains. TypeScript will warn you at compile time.
+
+```tsx
+// ❌ TypeScript error: undo is not chainable
+chained.undo().run();
+
+// ✅ Call directly instead
+commands.undo();
+```
+
+## Advanced Patterns
+
+### Logging State Changes
+
+Log every state change for debugging:
+
+```tsx
+const LoggingEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={(parameter) => {
+        console.log('Previous state:', parameter.previousState);
+        console.log('New state:', parameter.state);
+        console.log('Transaction:', parameter.tr);
+        
+        setState(parameter.state);
+      }}
+    />
+  );
+};
+```
+
+### Validating Changes
+
+Reject changes that don't meet certain criteria:
+
+```tsx
+const ValidatingEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={(parameter) => {
+        const wordCount = parameter.state.doc.textContent.split(/\s+/).length;
+        
+        // Limit to 100 words
+        if (wordCount > 100) {
+          // Don't update state - revert the change
+          alert('Maximum 100 words allowed!');
+          return;
+        }
+        
+        setState(parameter.state);
+      }}
+    />
+  );
+};
+```
+
+### Syncing with External State
+
+Integrate with state management libraries:
+
+```tsx
+import { useDispatch, useSelector } from 'react-redux';
+import { setEditorState } from './store/editorSlice';
+
+const ReduxEditor = () => {
+  const dispatch = useDispatch();
+  const editorState = useSelector((state) => state.editor.state);
+  
+  const { manager } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  return (
+    <Remirror
+      manager={manager}
+      state={editorState}
+      onChange={(parameter) => {
+        dispatch(setEditorState(parameter.state));
+      }}
+    />
+  );
+};
+```
+
+### Debouncing Updates
+
+Debounce state updates to reduce re-renders:
+
+```tsx
+import { useMemo } from 'react';
+import { debounce } from 'lodash';
+
+const DebouncedEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+
+  const debouncedSetState = useMemo(
+    () => debounce((newState) => {
+      setState(newState);
+      // Save to backend, etc.
+    }, 500),
+    [setState]
+  );
+
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={(parameter) => {
+        // Update immediately for responsive UI
+        setState(parameter.state);
+        // Debounce expensive operations
+        debouncedSetState(parameter.state);
+      }}
+    />
+  );
+};
+```
+
+## Working with Transactions
+
+Transactions contain information about what changed:
+
+```tsx
+onChange={(parameter) => {
+  const { tr } = parameter;
+  
+  if (tr) {
+    // Check what changed
+    console.log('Doc changed:', tr.docChanged);
+    console.log('Selection changed:', tr.selectionSet);
+    console.log('Steps:', tr.steps);
+    
+    // Access metadata
+    console.log('Time:', tr.time);
+    console.log('Meta:', tr.getMeta('key'));
+  }
+  
+  setState(parameter.state);
+}}
+```
+
+## Testing Controlled Editors
+
+Controlled editors are easier to test since state is explicit:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+test('controlled editor updates state', async () => {
+  const handleChange = jest.fn();
+  
+  render(
+    <Remirror
+      manager={manager}
+      state={initialState}
+      onChange={handleChange}
+    />
+  );
+  
+  const editor = screen.getByRole('textbox');
+  await userEvent.type(editor, 'Hello');
+  
+  expect(handleChange).toHaveBeenCalled();
+});
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Chained Commands" icon="link">
+    Always use `useChainedCommands` for multiple operations in controlled editors
+  </Card>
+  
+  <Card title="Avoid Over-Engineering" icon="triangle-exclamation">
+    Only use controlled mode when you actually need state control
+  </Card>
+  
+  <Card title="Memoize Callbacks" icon="bolt">
+    Use `useCallback` for onChange handlers to prevent unnecessary re-renders
+  </Card>
+  
+  <Card title="Test Thoroughly" icon="flask">
+    Controlled editors have more edge cases - test state updates carefully
+  </Card>
+</CardGroup>
+
+## Workarounds Summary
+
+- **Multiple commands**: Use `useChainedCommands`
+- **Transaction-based commands**: Work automatically with transactions
+- **Non-chainable commands** (undo/redo): Call directly, not in chains
+
+<Note>
+  See the [controlled editor test](https://github.com/remirror/remirror/blob/7477b9357368d62e201d05db4d9872954ae13c11/packages/%40remirror/react/src/components/__tests__/react-editor-controlled.spec.tsx#L368-L418) for expected behavior examples.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building Custom Editor" icon="code" href="/guides/building-custom-editor">
+    Learn the fundamentals of building editors
+  </Card>
+  <Card title="Collaboration" icon="users" href="/guides/collaboration">
+    Add real-time collaborative editing
+  </Card>
+</CardGroup>

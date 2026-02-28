@@ -1,0 +1,506 @@
+---
+title: Code Extensions
+description: Inline code marks and code block support with syntax highlighting
+---
+
+Code extensions provide inline code formatting and multi-line code blocks with syntax highlighting.
+
+## CodeExtension
+
+Adds inline code marks for formatting text as code.
+
+### Installation
+
+```typescript
+import { CodeExtension } from 'remirror/extensions';
+
+const extensions = () => [new CodeExtension()];
+```
+
+### Commands
+
+#### `toggleCode()`
+
+Toggle inline code formatting.
+
+```typescript
+commands.toggleCode();
+```
+
+### Keyboard Shortcuts
+
+- `` Mod-` `` - Toggle inline code (Ctrl/Cmd + backtick)
+
+### Input Rules
+
+Markdown-style patterns:
+- `` `code` `` - Converts to inline code
+
+### Paste Rules
+
+Automatically converts pasted markdown:
+- `` `inline code` `` - Converts to code mark
+
+### Schema
+
+```typescript
+code [mark] {
+  excludes: '_' // Excludes all other marks
+  parseDOM: [{ tag: 'code' }]
+  toDOM: ['code', { spellcheck: 'false' }, 0]
+}
+```
+
+---
+
+## CodeBlockExtension
+
+Adds multi-line code blocks with syntax highlighting.
+
+### Installation
+
+```typescript
+import { CodeBlockExtension } from 'remirror/extensions';
+
+const extensions = () => [new CodeBlockExtension()];
+```
+
+### Options
+
+<ParamField path="supportedLanguages" type="Language[]" default="[]">
+  Languages to register for syntax highlighting
+  
+  ```typescript
+  import javascript from 'refractor/lang/javascript';
+  import typescript from 'refractor/lang/typescript';
+  import python from 'refractor/lang/python';
+  
+  new CodeBlockExtension({
+    supportedLanguages: [javascript, typescript, python],
+  })
+  ```
+</ParamField>
+
+<ParamField path="defaultLanguage" type="string" default="'markup'">
+  Default language when none specified
+  
+  ```typescript
+  new CodeBlockExtension({ defaultLanguage: 'javascript' })
+  ```
+</ParamField>
+
+<ParamField path="syntaxTheme" type="string" default="'a11y_dark'">
+  Syntax highlighting theme
+  
+  Available themes:
+  - `a11y_dark`
+  - `atom_dark`
+  - `base16_ateliersulphurpool_light`
+  - `cb`
+  - `darcula`
+  - `dracula`
+  - `duotone_dark`
+  - `duotone_earth`
+  - `duotone_forest`
+  - `duotone_light`
+  - `duotone_sea`
+  - `duotone_space`
+  - `ghcolors`
+  - `hopscotch`
+  - `pojoaque`
+  - `vs`
+  - `xonokai`
+  
+  ```typescript
+  new CodeBlockExtension({ syntaxTheme: 'dracula' })
+  ```
+</ParamField>
+
+<ParamField path="defaultWrap" type="boolean" default="false">
+  Enable text wrapping by default
+  
+  ```typescript
+  new CodeBlockExtension({ defaultWrap: true })
+  ```
+</ParamField>
+
+<ParamField path="toggleName" type="string" default="'paragraph'">
+  Node type to toggle to when turning off code block
+  
+  ```typescript
+  new CodeBlockExtension({ toggleName: 'paragraph' })
+  ```
+</ParamField>
+
+<ParamField path="formatter" type="(props: FormatCodeProps) => Promise<FormatCodeResult>">
+  Code formatter function (e.g., Prettier)
+  
+  ```typescript
+  import prettier from 'prettier/standalone';
+  import parserBabel from 'prettier/parser-babel';
+  
+  new CodeBlockExtension({
+    formatter: async ({ source, language }) => {
+      if (language !== 'javascript') {
+        return { formatted: source, cursorOffset: 0 };
+      }
+      
+      const formatted = prettier.format(source, {
+        parser: 'babel',
+        plugins: [parserBabel],
+      });
+      
+      return { formatted, cursorOffset: 0 };
+    },
+  })
+  ```
+</ParamField>
+
+<ParamField path="plainTextClassName" type="string" default="''">
+  CSS class for plain text code blocks
+</ParamField>
+
+<ParamField path="getLanguageFromDom" type="(element: HTMLElement, parent: HTMLElement) => string">
+  Extract language from pasted DOM elements
+</ParamField>
+
+### Commands
+
+#### `toggleCodeBlock(attributes?)`
+
+Toggle code block at current position.
+
+<ParamField path="attributes.language" type="string">
+  Programming language
+</ParamField>
+
+<ParamField path="attributes.wrap" type="boolean">
+  Enable text wrapping
+</ParamField>
+
+```typescript
+// Toggle with default language
+commands.toggleCodeBlock();
+
+// Toggle with specific language
+commands.toggleCodeBlock({ language: 'typescript' });
+
+// Toggle with wrapping
+commands.toggleCodeBlock({ language: 'python', wrap: true });
+```
+
+#### `createCodeBlock(attributes)`
+
+Create a code block.
+
+```typescript
+commands.createCodeBlock({ language: 'javascript' });
+```
+
+#### `updateCodeBlock(attributes)`
+
+Update code block attributes (e.g., change language).
+
+```typescript
+// Change language
+commands.updateCodeBlock({ language: 'typescript' });
+
+// Enable wrapping
+commands.updateCodeBlock({ wrap: true });
+```
+
+#### `formatCodeBlock(options?)`
+
+Format code using the configured formatter.
+
+<ParamField path="options.pos" type="number">
+  Position of code block to format
+</ParamField>
+
+```typescript
+// Format current code block
+commands.formatCodeBlock();
+
+// Format specific code block
+commands.formatCodeBlock({ pos: 100 });
+```
+
+### Keyboard Shortcuts
+
+- `Tab` - Insert tab character
+- `Backspace` - Smart backspace handling
+- `Enter` - Handle code fence creation (``` + language)
+- `Mod-Shift-Alt-F` - Format code block
+
+### Input Rules
+
+Markdown-style code fences:
+- `` ```js `` - Creates JavaScript code block
+- `` ```typescript `` - Creates TypeScript code block
+- `` ```python `` - Creates Python code block
+- `` ``` `` - Creates code block with default language
+
+### Schema
+
+```typescript
+codeBlock [node] {
+  content: 'text*'
+  marks: '' // No marks allowed
+  code: true
+  defining: true
+  attrs: {
+    language: string // Language identifier
+    wrap: boolean     // Text wrapping enabled
+  }
+}
+```
+
+---
+
+## Usage Examples
+
+### Basic Code Editor
+
+```tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { CodeExtension, CodeBlockExtension } from 'remirror/extensions';
+import javascript from 'refractor/lang/javascript';
+import typescript from 'refractor/lang/typescript';
+
+function CodeEditor() {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new CodeExtension(),
+      new CodeBlockExtension({
+        supportedLanguages: [javascript, typescript],
+        defaultLanguage: 'javascript',
+        syntaxTheme: 'dracula',
+      }),
+    ],
+  });
+
+  return (
+    <div>
+      <button onClick={() => manager.commands.toggleCode()}>
+        Inline Code
+      </button>
+      <button onClick={() => manager.commands.toggleCodeBlock()}>
+        Code Block
+      </button>
+      <Remirror manager={manager} />
+    </div>
+  );
+}
+```
+
+### Language Selector
+
+```tsx
+import { useCommands, useActive } from '@remirror/react';
+
+function LanguageSelector() {
+  const commands = useCommands();
+  const active = useActive();
+  
+  const languages = [
+    'javascript',
+    'typescript',
+    'python',
+    'rust',
+    'go',
+  ];
+
+  if (!active.codeBlock()) {
+    return null;
+  }
+
+  const currentLanguage = active.codeBlock()?.language || 'markup';
+
+  return (
+    <select
+      value={currentLanguage}
+      onChange={(e) => {
+        commands.updateCodeBlock({ language: e.target.value });
+      }}
+    >
+      {languages.map((lang) => (
+        <option key={lang} value={lang}>
+          {lang}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+### With Prettier Formatting
+
+```tsx
+import { CodeBlockExtension } from 'remirror/extensions';
+import prettier from 'prettier/standalone';
+import parserBabel from 'prettier/parser-babel';
+import parserTypescript from 'prettier/parser-typescript';
+
+const extensions = () => [
+  new CodeBlockExtension({
+    formatter: async ({ source, language }) => {
+      let parser;
+      let plugins = [];
+      
+      switch (language) {
+        case 'javascript':
+          parser = 'babel';
+          plugins = [parserBabel];
+          break;
+        case 'typescript':
+          parser = 'typescript';
+          plugins = [parserTypescript];
+          break;
+        default:
+          // No formatting for other languages
+          return { formatted: source, cursorOffset: 0 };
+      }
+      
+      try {
+        const formatted = prettier.format(source, {
+          parser,
+          plugins,
+          semi: true,
+          singleQuote: true,
+        });
+        
+        return { formatted, cursorOffset: 0 };
+      } catch (error) {
+        // Return original if formatting fails
+        return { formatted: source, cursorOffset: 0 };
+      }
+    },
+  }),
+];
+```
+
+### Format Button
+
+```tsx
+import { useCommands, useActive } from '@remirror/react';
+
+function FormatButton() {
+  const commands = useCommands();
+  const active = useActive();
+  
+  if (!active.codeBlock()) {
+    return null;
+  }
+
+  return (
+    <button
+      onClick={() => commands.formatCodeBlock()}
+      disabled={!commands.formatCodeBlock.enabled()}
+    >
+      Format Code
+    </button>
+  );
+}
+```
+
+---
+
+## CodeMirror Integration
+
+For advanced code editing features, use CodeMirror extensions:
+
+### CodeMirror 6
+
+```typescript
+import { Codemirror6Extension } from 'remirror/extensions';
+
+const extensions = () => [
+  new Codemirror6Extension(),
+];
+```
+
+### CodeMirror 5
+
+```typescript
+import { Codemirror5Extension } from 'remirror/extensions';
+
+const extensions = () => [
+  new Codemirror5Extension(),
+];
+```
+
+CodeMirror extensions provide:
+- Advanced syntax highlighting
+- Code completion
+- Linting
+- Vim/Emacs keybindings
+- Multiple cursors
+
+---
+
+## Supported Languages
+
+The extension uses [Refractor](https://github.com/wooorm/refractor) for syntax highlighting. Import languages as needed:
+
+```typescript
+import javascript from 'refractor/lang/javascript';
+import typescript from 'refractor/lang/typescript';
+import python from 'refractor/lang/python';
+import rust from 'refractor/lang/rust';
+import go from 'refractor/lang/go';
+import css from 'refractor/lang/css';
+import html from 'refractor/lang/markup';
+import json from 'refractor/lang/json';
+import yaml from 'refractor/lang/yaml';
+import markdown from 'refractor/lang/markdown';
+import bash from 'refractor/lang/bash';
+import sql from 'refractor/lang/sql';
+
+new CodeBlockExtension({
+  supportedLanguages: [
+    javascript,
+    typescript,
+    python,
+    rust,
+    go,
+    css,
+    html,
+    json,
+    yaml,
+    markdown,
+    bash,
+    sql,
+  ],
+});
+```
+
+[See all available languages](https://github.com/wooorm/refractor#syntaxes)
+
+---
+
+## Syntax Themes
+
+Themes are automatically applied via CSS classes. The `syntaxTheme` option sets the class on the editor.
+
+Custom themes can be created by defining CSS for syntax tokens:
+
+```css
+.remirror-theme .token.comment {
+  color: #6a9955;
+}
+
+.remirror-theme .token.keyword {
+  color: #569cd6;
+}
+
+.remirror-theme .token.string {
+  color: #ce9178;
+}
+```
+
+---
+
+## Related
+
+- [Text Formatting](/api/extensions/text-formatting)
+- [Markdown Extension](/api/extensions/markdown)

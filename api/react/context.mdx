@@ -1,0 +1,411 @@
+---
+title: React Context
+description: Understanding and using the Remirror React Context API for accessing editor state and functionality
+---
+
+# React Context
+
+Remirror uses React Context to provide editor functionality to all components rendered within the `<Remirror />` component. This allows you to access commands, state, helpers, and more from anywhere in your component tree.
+
+## RemirrorContext
+
+The core context that provides access to all editor functionality.
+
+```tsx
+import { RemirrorContext } from '@remirror/react';
+```
+
+### Accessing the Context
+
+While you can use `useContext(RemirrorContext)` directly, it's recommended to use the `useRemirrorContext()` hook instead:
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const MyComponent = () => {
+  const context = useRemirrorContext();
+  // Access all editor functionality
+};
+```
+
+## ReactFrameworkOutput
+
+The context provides a `ReactFrameworkOutput` object with the following properties:
+
+### Core Properties
+
+<ResponseField name="commands" type="CommandsFromExtensions<Extension>">
+  All available commands from installed extensions. Execute editor actions like toggling bold, inserting text, etc.
+  
+  ```tsx
+  const { commands } = useRemirrorContext();
+  commands.toggleBold();
+  ```
+</ResponseField>
+
+<ResponseField name="chain" type="ChainedCommandsFromExtensions<Extension>">
+  Chainable commands interface. Call multiple commands in sequence.
+  
+  ```tsx
+  const { chain } = useRemirrorContext();
+  chain.toggleBold().toggleItalic().run();
+  ```
+</ResponseField>
+
+<ResponseField name="helpers" type="HelpersFromExtensions<Extension>">
+  Helper methods for querying editor state and content.
+  
+  ```tsx
+  const { helpers } = useRemirrorContext();
+  const text = helpers.getText();
+  ```
+</ResponseField>
+
+<ResponseField name="active" type="ActiveFromExtensions<Extension>">
+  Check which marks and nodes are active at the current selection.
+  
+  ```tsx
+  const { active } = useRemirrorContext();
+  const isBold = active.bold();
+  ```
+</ResponseField>
+
+<ResponseField name="attrs" type="AttrsFromExtensions<Extension>">
+  Access attributes of marks and nodes at the current selection.
+  
+  ```tsx
+  const { attrs } = useRemirrorContext();
+  const linkHref = attrs.link()?.href;
+  ```
+</ResponseField>
+
+### State Access
+
+<ResponseField name="getState" type="() => EditorState">
+  Returns the current editor state.
+  
+  ```tsx
+  const { getState } = useRemirrorContext();
+  const state = getState();
+  console.log(state.selection);
+  ```
+</ResponseField>
+
+<ResponseField name="setState" type="(state: EditorState) => void">
+  Update the editor state (for controlled editors).
+</ResponseField>
+
+<ResponseField name="view" type="EditorView">
+  The ProseMirror EditorView instance.
+  
+  ```tsx
+  const { view } = useRemirrorContext();
+  view.focus();
+  ```
+</ResponseField>
+
+### Extension Access
+
+<ResponseField name="getExtension" type="<Type>(Constructor: Type) => InstanceType<Type>">
+  Get an extension instance by its constructor.
+  
+  ```tsx
+  const { getExtension } = useRemirrorContext();
+  const bold = getExtension(BoldExtension);
+  ```
+</ResponseField>
+
+<ResponseField name="hasExtension" type="<Type>(Constructor: Type) => boolean">
+  Check if an extension is installed.
+  
+  ```tsx
+  const { hasExtension } = useRemirrorContext();
+  const hasBold = hasExtension(BoldExtension);
+  ```
+</ResponseField>
+
+<ResponseField name="manager" type="RemirrorManager<Extension>">
+  The manager instance that orchestrates all extensions.
+</ResponseField>
+
+### React-Specific Properties
+
+<ResponseField name="getRootProps" type="<RefKey = 'ref'>(config?: GetRootPropsConfig<RefKey>) => RefKeyRootProps<RefKey>">
+  Returns props to spread on the element where the editor should be rendered.
+  
+  ```tsx
+  const { getRootProps } = useRemirrorContext();
+  return <div {...getRootProps()} />;
+  ```
+</ResponseField>
+
+<ResponseField name="portalContainer" type="PortalContainer">
+  Container for rendering React portals within the editor DOM.
+</ResponseField>
+
+<ResponseField name="addHandler" type="AddHandler">
+  Add event handlers to the editor.
+  
+  ```tsx
+  const { addHandler } = useRemirrorContext();
+  
+  useEffect(() => {
+    return addHandler('updated', ({ state }) => {
+      console.log('Editor updated:', state);
+    });
+  }, [addHandler]);
+  ```
+</ResponseField>
+
+## Context Update Patterns
+
+The `useRemirrorContext` hook supports different update patterns for performance optimization:
+
+### No Auto-Update (Default)
+
+Best for components that don't need to track editor state changes:
+
+```tsx
+const MyButton = () => {
+  const { commands } = useRemirrorContext();
+  // Won't re-render on editor updates
+  return <button onClick={() => commands.toggleBold()}>Bold</button>;
+};
+```
+
+### Auto-Update
+
+Re-renders on every editor update (useful for active states):
+
+```tsx
+const BoldButton = () => {
+  const { commands, active } = useRemirrorContext({ autoUpdate: true });
+  // Re-renders on every editor update
+  return (
+    <button 
+      onClick={() => commands.toggleBold()}
+      className={active.bold() ? 'active' : ''}
+    >
+      Bold
+    </button>
+  );
+};
+```
+
+### Custom Update Handler
+
+Selective re-rendering based on custom logic:
+
+```tsx
+const SelectiveButton = () => {
+  const [isBold, setIsBold] = useState(false);
+  
+  const { commands, active } = useRemirrorContext(({ state }) => {
+    const newBold = active.bold();
+    if (newBold !== isBold) {
+      setIsBold(newBold);
+    }
+  });
+  
+  // Only re-renders when bold state actually changes
+  return (
+    <button 
+      onClick={() => commands.toggleBold()}
+      className={isBold ? 'active' : ''}
+    >
+      Bold
+    </button>
+  );
+};
+```
+
+## I18nContext
+
+Separate context for internationalization support.
+
+```tsx
+import { I18nContext, I18nProvider } from '@remirror/react';
+import { useContext } from 'react';
+
+const TranslatedButton = () => {
+  const t = useContext(I18nContext);
+  
+  return (
+    <button>
+      {t({ id: 'editor.bold', message: 'Bold' })}
+    </button>
+  );
+};
+```
+
+### I18nProvider
+
+Provides internationalization context to the editor:
+
+```tsx
+import { I18nProvider } from '@remirror/react';
+import { i18nFormat } from '@remirror/i18n';
+
+const App = () => {
+  return (
+    <I18nProvider 
+      i18nFormat={i18nFormat}
+      locale="es"
+      supportedLocales={['en', 'es', 'fr']}
+    >
+      <Editor />
+    </I18nProvider>
+  );
+};
+```
+
+#### Props
+
+<ParamField path="i18nFormat" type="I18nFormatter" optional>
+  Function that formats ICU MessageFormat encoded messages
+  
+  ```tsx
+  type I18nFormatter = (
+    message: I18nMessage,
+    values?: Record<string, any>,
+    locale?: string,
+    locales?: string[]
+  ) => string;
+  ```
+</ParamField>
+
+<ParamField path="locale" type="string" default="'en'">
+  The current locale for the editor
+</ParamField>
+
+<ParamField path="supportedLocales" type="string[]" optional>
+  Array of supported locale codes. Defaults to `[locale]`
+</ParamField>
+
+<ParamField path="children" type="ReactNode">
+  Child components
+</ParamField>
+
+## Complete Example
+
+```tsx
+import { 
+  Remirror,
+  useRemirrorContext,
+  useRemirror 
+} from '@remirror/react';
+import { 
+  BoldExtension,
+  ItalicExtension,
+  LinkExtension 
+} from 'remirror/extensions';
+import { useCallback } from 'react';
+
+// Component with no auto-update (performance optimized)
+const InsertButton = () => {
+  const { commands } = useRemirrorContext();
+  
+  return (
+    <button onClick={() => commands.insertText('Hello World')}>
+      Insert Text
+    </button>
+  );
+};
+
+// Component with auto-update (tracks active states)
+const FormattingToolbar = () => {
+  const { commands, active } = useRemirrorContext({ autoUpdate: true });
+  
+  return (
+    <div className="toolbar">
+      <button 
+        onClick={() => commands.toggleBold()}
+        className={active.bold() ? 'active' : ''}
+      >
+        Bold
+      </button>
+      <button 
+        onClick={() => commands.toggleItalic()}
+        className={active.italic() ? 'active' : ''}
+      >
+        Italic
+      </button>
+    </div>
+  );
+};
+
+// Component with custom update handler
+const LinkInfo = () => {
+  const [linkHref, setLinkHref] = useState<string | null>(null);
+  
+  const { attrs } = useRemirrorContext(({ state }) => {
+    const newHref = attrs.link()?.href;
+    if (newHref !== linkHref) {
+      setLinkHref(newHref || null);
+    }
+  });
+  
+  return linkHref ? (
+    <div>Current link: {linkHref}</div>
+  ) : null;
+};
+
+// Main editor component
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [
+      new BoldExtension(),
+      new ItalicExtension(),
+      new LinkExtension(),
+    ],
+  });
+
+  return (
+    <Remirror manager={manager} autoRender="start">
+      <FormattingToolbar />
+      <InsertButton />
+      <LinkInfo />
+    </Remirror>
+  );
+};
+```
+
+## Best Practices
+
+<Tip>
+  **Use the right update pattern** - Only use `autoUpdate: true` for components that need to track editor state. Default (no auto-update) is most performant.
+</Tip>
+
+<Tip>
+  **Prefer specialized hooks** - Use `useCommands()`, `useActive()`, `useHelpers()` etc. instead of destructuring from `useRemirrorContext()` for better code readability.
+</Tip>
+
+<Tip>
+  **Memoize custom handlers** - When using custom update handlers, wrap them in `useCallback()` to prevent unnecessary effect re-runs.
+</Tip>
+
+<Warning>
+  **Context is only available inside Remirror** - Make sure components using `useRemirrorContext()` are rendered as children of `<Remirror />`.
+</Warning>
+
+## Type Safety
+
+Create a typed version of `useRemirrorContext` for better intellisense:
+
+```tsx
+import { useRemirrorContext, UseRemirrorContextType } from '@remirror/react';
+import { SocialPreset } from 'remirror/extensions';
+
+// Create typed hook
+const useSocialRemirror = useRemirrorContext as UseRemirrorContextType<SocialPreset>;
+
+// Use with full type inference
+const Editor = () => {
+  const { commands } = useSocialRemirror();
+  
+  // All social preset commands available with intellisense
+  commands.createMention({ id: '1', label: '@john' });
+  
+  return null;
+};
+```

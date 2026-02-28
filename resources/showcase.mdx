@@ -1,0 +1,175 @@
+---
+title: Showcase
+description: Ready-to-use editors and projects built with Remirror
+---
+
+Discover off-the-shelf editor solutions and get inspired for your next project. Remirror provides production-ready editors that you can install and customize.
+
+## Ready-to-Use Editors
+
+These editors are part of the Remirror ecosystem and ready to install in your projects.
+
+<CardGroup cols={3}>
+  <Card title="Social Editor" icon="at" color="#3b82f6">
+    A modern editor with mention and tag support, perfect for social platforms and collaborative tools.
+  </Card>
+  <Card title="WYSIWYG Editor" icon="pen-to-square" color="#8b5cf6">
+    A full-featured rich text editor with all the formatting options you need.
+  </Card>
+  <Card title="Markdown Editor" icon="markdown" color="#06b6d4">
+    A powerful editor designed specifically for markdown editing with live preview.
+  </Card>
+</CardGroup>
+
+## Social Editor
+
+<Note>
+  The `<SocialEditor>` provides a state-of-the-art editor with mention and tag support.
+</Note>
+
+### Installation
+
+```bash
+npm install @remirror/react-editors
+```
+
+### Usage
+
+```tsx
+import { SocialEditor } from '@remirror/react-editors/social';
+
+function App() {
+  return <SocialEditor />;
+}
+```
+
+### Features
+
+- Mention support with @ syntax
+- Hashtag support with # syntax
+- Emoji support
+- Rich text formatting
+- Mobile-friendly interface
+
+<Card title="View Examples" icon="play" href="https://remirror.vercel.app/?path=/story/editors-social--basic">
+  Explore interactive examples on Storybook
+</Card>
+
+<Tip>
+  Want to customize the behavior? Simply copy the `<SocialEditor>` code and change the extensions. That's what Remirror was built for.
+</Tip>
+
+## WYSIWYG Editor
+
+<Note>
+  The `<WysiwygEditor>` provides a state-of-the-art rich text editor.
+</Note>
+
+### Installation
+
+```bash
+npm install @remirror/react-editors
+```
+
+### Usage
+
+```tsx
+import { WysiwygEditor } from '@remirror/react-editors/wysiwyg';
+
+function App() {
+  return <WysiwygEditor />;
+}
+```
+
+### Features
+
+- Bold, italic, underline formatting
+- Headings and paragraphs
+- Lists (ordered and unordered)
+- Links and images
+- Code blocks
+- Tables
+- And much more
+
+<Card title="View Examples" icon="play" href="https://remirror.vercel.app/?path=/story/editors-wysiwyg--basic">
+  Explore interactive examples on Storybook
+</Card>
+
+<Tip>
+  Want to customize the behavior? Simply copy the `<WysiwygEditor>` code and change the extensions. That's what Remirror was built for.
+</Tip>
+
+## Markdown Editor
+
+<Note>
+  The `<MarkdownEditor>` provides a state-of-the-art editor to edit markdown.
+</Note>
+
+### Installation
+
+```bash
+npm install @remirror/react-editors
+```
+
+### Usage
+
+```tsx
+import { MarkdownEditor } from '@remirror/react-editors/markdown';
+
+function App() {
+  return <MarkdownEditor />;
+}
+```
+
+### Features
+
+- Full markdown syntax support
+- Live preview
+- Syntax highlighting
+- Keyboard shortcuts
+- Export to markdown
+- Import from markdown
+
+<Card title="View Examples" icon="play" href="https://remirror.vercel.app/?path=/story/editors-markdown--basic">
+  Explore interactive examples on Storybook
+</Card>
+
+<Tip>
+  Want to customize the behavior? Simply copy the `<MarkdownEditor>` code and change the extensions. That's what Remirror was built for.
+</Tip>
+
+## Customization
+
+All of these editors are fully customizable. The beauty of Remirror is that you can:
+
+<Steps>
+  <Step title="Copy the Source">
+    Copy the editor source code into your project
+  </Step>
+  <Step title="Modify Extensions">
+    Add, remove, or configure extensions to match your needs
+  </Step>
+  <Step title="Customize Styling">
+    Apply your own CSS and theming
+  </Step>
+  <Step title="Add Features">
+    Build custom extensions for unique functionality
+  </Step>
+</Steps>
+
+## Get Inspired
+
+<Info>
+  If a project has no output, does it really exist? These showcased editors prove that Remirror delivers production-ready solutions.
+</Info>
+
+Use these editors as starting points for your own projects. Whether you're building a social platform, a content management system, or a documentation tool, Remirror has you covered.
+
+<CardGroup cols={2}>
+  <Card title="Explore Extensions" icon="puzzle-piece" href="/extensions">
+    Discover all available Remirror extensions
+  </Card>
+  <Card title="View API Reference" icon="code" href="/api">
+    Check out the complete API documentation
+  </Card>
+</CardGroup>

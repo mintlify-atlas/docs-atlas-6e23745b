@@ -1,0 +1,494 @@
+---
+title: Styling Your Editor
+description: Learn how to style your Remirror editor using CSS, styled-components, or Emotion
+---
+
+# Styling Your Editor
+
+Remirror requires styles for the editor to function correctly across different browsers. This guide shows you how to add and customize these styles.
+
+## Required Styles
+
+Remirror needs base styles for proper functionality. Choose one of the following methods to include them:
+
+<Tabs>
+  <Tab title="Plain CSS">
+    Import the CSS file and wrap your editor with the `remirror-theme` class:
+
+    ```tsx
+    import 'remirror/styles/all.css';
+    import { Remirror, useRemirror } from '@remirror/react';
+
+    export const MyEditor = () => {
+      const { manager, state } = useRemirror({ extensions: () => [] });
+
+      return (
+        <div className='remirror-theme'>
+          <Remirror manager={manager} initialContent={state} />
+        </div>
+      );
+    };
+    ```
+
+    <Note>
+      The `remirror-theme` class adds CSS variables with their default values to the DOM for consumption by editors within this area.
+    </Note>
+  </Tab>
+
+  <Tab title="Emotion">
+    Use the `AllStyledComponent` from `@remirror/styles/emotion`:
+
+    ```tsx
+    import React from 'react';
+    import { ThemeProvider } from '@remirror/react';
+    import { AllStyledComponent } from '@remirror/styles/emotion';
+    import { MyEditor } from './my-editor';
+
+    const App = () => {
+      return (
+        <AllStyledComponent>
+          <ThemeProvider>
+            <MyEditor />
+          </ThemeProvider>
+        </AllStyledComponent>
+      );
+    };
+    ```
+
+    <Warning>
+      You must install `@remirror/styles` and `@emotion/styled` as peer dependencies.
+    </Warning>
+  </Tab>
+
+  <Tab title="styled-components">
+    Use the `AllStyledComponent` from `@remirror/styles/styled-components`:
+
+    ```tsx
+    import React from 'react';
+    import { ThemeProvider } from '@remirror/react';
+    import { AllStyledComponent } from '@remirror/styles/styled-components';
+    import { MyEditor } from './my-editor';
+
+    const App = () => {
+      return (
+        <AllStyledComponent>
+          <ThemeProvider>
+            <MyEditor />
+          </ThemeProvider>
+        </AllStyledComponent>
+      );
+    };
+    ```
+
+    <Warning>
+      You must install `@remirror/styles` and `styled-components` as peer dependencies.
+    </Warning>
+  </Tab>
+
+  <Tab title="Emotion DOM">
+    Programmatically add styles to a DOM element:
+
+    ```ts
+    import { THEME } from 'remirror';
+    import { addStylesToElement, allStyles } from '@remirror/styles/dom';
+
+    const wrapperElement = document.createElement('div');
+    wrapperElement.classList.add(THEME); // Add CSS variables
+    addStylesToElement(wrapperElement, allStyles);
+    ```
+
+    This approach is useful when working with vanilla JavaScript or when you need more control over style injection.
+  </Tab>
+</Tabs>
+
+## CSS Variables
+
+Remirror uses CSS variables (custom properties) for theming. You can customize these by overriding them:
+
+```css
+.remirror-theme {
+  /* Colors */
+  --rmr-color-primary: #1ea7fd;
+  --rmr-color-background: #ffffff;
+  --rmr-color-text: #000000;
+  --rmr-color-border: #e0e0e0;
+  
+  /* Spacing */
+  --rmr-spacing-1: 4px;
+  --rmr-spacing-2: 8px;
+  --rmr-spacing-3: 12px;
+  --rmr-spacing-4: 16px;
+  
+  /* Typography */
+  --rmr-font-family-default: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --rmr-font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  --rmr-font-size-1: 12px;
+  --rmr-font-size-2: 14px;
+  --rmr-font-size-3: 16px;
+  
+  /* Editor specific */
+  --rmr-color-selection: rgba(30, 167, 253, 0.2);
+  --rmr-hue-blue: 210;
+  --rmr-hue-red: 0;
+  --rmr-hue-green: 120;
+}
+```
+
+## Customizing Editor Appearance
+
+### Basic Styling
+
+Style the editor wrapper and content area:
+
+```css
+.remirror-theme {
+  /* Editor container */
+  --rmr-color-background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.remirror-theme .ProseMirror {
+  /* Editor content area */
+  min-height: 300px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #333;
+}
+
+.remirror-theme .ProseMirror:focus {
+  outline: none;
+}
+```
+
+### Styling Placeholders
+
+Customize the placeholder text appearance:
+
+```css
+.remirror-theme .ProseMirror .remirror-is-empty::before {
+  color: #999;
+  font-style: italic;
+}
+```
+
+### Styling Content
+
+Style specific content types:
+
+```css
+/* Headings */
+.remirror-theme h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.remirror-theme h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Code blocks */
+.remirror-theme pre {
+  background: #282c34;
+  color: #abb2bf;
+  border-radius: 4px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.remirror-theme code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--rmr-font-family-mono);
+}
+
+/* Blockquotes */
+.remirror-theme blockquote {
+  border-left: 4px solid var(--rmr-color-primary);
+  padding-left: 16px;
+  margin-left: 0;
+  color: #666;
+  font-style: italic;
+}
+
+/* Links */
+.remirror-theme a {
+  color: var(--rmr-color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.remirror-theme a:hover {
+  opacity: 0.8;
+}
+```
+
+## Dark Mode Support
+
+Implement dark mode using CSS custom properties:
+
+```css
+/* Light mode (default) */
+.remirror-theme {
+  --rmr-color-background: #ffffff;
+  --rmr-color-text: #000000;
+  --rmr-color-border: #e0e0e0;
+  --rmr-color-selection: rgba(30, 167, 253, 0.2);
+}
+
+/* Dark mode */
+.remirror-theme[data-theme="dark"] {
+  --rmr-color-background: #1e1e1e;
+  --rmr-color-text: #e0e0e0;
+  --rmr-color-border: #404040;
+  --rmr-color-selection: rgba(30, 167, 253, 0.3);
+}
+
+/* Automatically switch based on system preference */
+@media (prefers-color-scheme: dark) {
+  .remirror-theme:not([data-theme]) {
+    --rmr-color-background: #1e1e1e;
+    --rmr-color-text: #e0e0e0;
+    --rmr-color-border: #404040;
+    --rmr-color-selection: rgba(30, 167, 253, 0.3);
+  }
+}
+```
+
+Toggle dark mode in React:
+
+```tsx
+import { useState } from 'react';
+import { Remirror, useRemirror } from '@remirror/react';
+
+const MyEditor = () => {
+  const [darkMode, setDarkMode] = useState(false);
+  const { manager, state } = useRemirror({ extensions: () => [] });
+
+  return (
+    <div>
+      <button onClick={() => setDarkMode(!darkMode)}>
+        Toggle {darkMode ? 'Light' : 'Dark'} Mode
+      </button>
+      <div 
+        className='remirror-theme' 
+        data-theme={darkMode ? 'dark' : 'light'}
+      >
+        <Remirror manager={manager} initialContent={state} />
+      </div>
+    </div>
+  );
+};
+```
+
+## Using ThemeProvider
+
+The `ThemeProvider` allows you to customize theme values programmatically:
+
+```tsx
+import { ThemeProvider } from '@remirror/react';
+import { AllStyledComponent } from '@remirror/styles/emotion';
+
+const customTheme = {
+  color: {
+    primary: '#ff6b6b',
+    background: '#f8f9fa',
+    text: '#212529',
+  },
+  fontSize: {
+    base: 16,
+    small: 14,
+    large: 18,
+  },
+};
+
+const App = () => {
+  return (
+    <AllStyledComponent>
+      <ThemeProvider theme={customTheme}>
+        <MyEditor />
+      </ThemeProvider>
+    </AllStyledComponent>
+  );
+};
+```
+
+## Styling Menus and Toolbars
+
+Customize the appearance of floating menus and toolbars:
+
+```css
+/* Toolbar container */
+.remirror-theme .remirror-toolbar {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Toolbar buttons */
+.remirror-theme .remirror-toolbar button {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  margin: 0 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+}
+
+.remirror-theme .remirror-toolbar button:hover {
+  background: #f5f5f5;
+  color: #000;
+}
+
+.remirror-theme .remirror-toolbar button[data-active="true"] {
+  background: var(--rmr-color-primary);
+  color: white;
+}
+
+.remirror-theme .remirror-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+```
+
+## Responsive Design
+
+Make your editor responsive:
+
+```css
+.remirror-theme {
+  max-width: 100%;
+  padding: 16px;
+}
+
+@media (max-width: 768px) {
+  .remirror-theme {
+    padding: 8px;
+    font-size: 14px;
+  }
+  
+  .remirror-theme .ProseMirror {
+    min-height: 200px;
+  }
+  
+  .remirror-theme .remirror-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 1200px) {
+  .remirror-theme {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+}
+```
+
+## Print Styles
+
+Optimize for printing:
+
+```css
+@media print {
+  .remirror-theme .remirror-toolbar,
+  .remirror-theme .remirror-floating-popover {
+    display: none !important;
+  }
+  
+  .remirror-theme .ProseMirror {
+    border: none !important;
+    padding: 0 !important;
+  }
+  
+  .remirror-theme {
+    background: white !important;
+    color: black !important;
+  }
+}
+```
+
+## Common Styling Patterns
+
+<CodeGroup>
+  ```css Minimal Editor
+  .remirror-theme {
+    border: none;
+    padding: 0;
+  }
+  
+  .remirror-theme .ProseMirror {
+    min-height: auto;
+    padding: 16px;
+  }
+  
+  .remirror-theme .ProseMirror:focus {
+    outline: 2px solid var(--rmr-color-primary);
+    outline-offset: 2px;
+  }
+  ```
+
+  ```css Card Style
+  .remirror-theme {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  ```
+
+  ```css Notion-like Style
+  .remirror-theme {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 96px;
+  }
+  
+  .remirror-theme .ProseMirror {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  
+  .remirror-theme h1 {
+    font-size: 40px;
+    font-weight: 700;
+    margin-top: 2rem;
+  }
+  ```
+</CodeGroup>
+
+## Tips for Custom Styling
+
+<Tip>
+  Use browser DevTools to inspect ProseMirror's generated DOM structure. This helps you understand what classes and elements to target.
+</Tip>
+
+<Warning>
+  Avoid overriding core ProseMirror functionality classes like `.ProseMirror-widget` or `.ProseMirror-decoration` unless you know what you're doing.
+</Warning>
+
+<Note>
+  When using CSS-in-JS solutions, make sure styles are applied before the editor mounts to avoid FOUC (Flash of Unstyled Content).
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building Custom Editor" icon="code" href="/guides/building-custom-editor">
+    Learn how to build a custom editor
+  </Card>
+  <Card title="Working with Extensions" icon="puzzle-piece" href="/guides/working-with-extensions">
+    Extend your editor's functionality
+  </Card>
+</CardGroup>

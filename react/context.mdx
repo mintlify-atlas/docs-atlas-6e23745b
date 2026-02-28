@@ -1,0 +1,654 @@
+---
+title: React Context
+description: Understanding and using Remirror's React context system
+---
+
+Remirror uses React Context to provide editor state, commands, and functionality to child components. This guide covers the context system, providers, and how to access context values.
+
+## Overview
+
+The Remirror context system provides:
+
+- **Editor State**: Current document state, selection, and schema
+- **Commands**: Methods to modify the editor content
+- **Helpers**: Utility functions for reading and transforming content
+- **Active States**: Check which marks/nodes are active at the current selection
+- **View Access**: Direct access to the ProseMirror view instance
+- **Manager**: The RemirrorManager instance controlling the editor
+
+## RemirrorContext
+
+The core context that stores the entire editor framework output.
+
+### Context Type
+
+```tsx File: hooks/use-remirror-context.ts
+import { createContext } from 'react';
+import type { ReactFrameworkOutput } from '@remirror/react';
+
+export const RemirrorContext = createContext<ReactFrameworkOutput<any> | null>(null);
+```
+
+### ReactFrameworkOutput
+
+The context value type that extends ProseMirror functionality with React-specific features:
+
+<ParamField path="getRootProps" type="(options?: GetRootPropsConfig) => RefKeyRootProps">
+  Returns props to spread on the element where ProseMirror should be mounted.
+</ParamField>
+
+<ParamField path="portalContainer" type="PortalContainer">
+  Container for managing React portals rendered into the ProseMirror DOM.
+</ParamField>
+
+<ParamField path="manager" type="RemirrorManager">
+  The manager instance controlling all extensions.
+</ParamField>
+
+<ParamField path="view" type="EditorView">
+  The ProseMirror EditorView instance.
+</ParamField>
+
+<ParamField path="getState" type="() => EditorState">
+  Function to get the current editor state.
+</ParamField>
+
+<ParamField path="commands" type="Commands">
+  All available commands from your extensions.
+</ParamField>
+
+<ParamField path="chain" type="ChainedCommands">
+  Chainable command interface.
+</ParamField>
+
+<ParamField path="helpers" type="Helpers">
+  Helper methods from your extensions.
+</ParamField>
+
+<ParamField path="active" type="Active">
+  Check which marks/nodes are active.
+</ParamField>
+
+<ParamField path="attrs" type="Attrs">
+  Get attributes of marks/nodes at current selection.
+</ParamField>
+
+<ParamField path="addHandler" type="(event: string, handler: Function) => () => void">
+  Add event listeners. Returns a dispose function.
+</ParamField>
+
+## Accessing Context
+
+### Using useRemirrorContext
+
+The recommended way to access the Remirror context:
+
+<CodeGroup>
+```tsx Basic Access
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorTools = () => {
+  const { commands, helpers, active } = useRemirrorContext();
+  
+  return (
+    <div>
+      <button onClick={() => commands.toggleBold()}>
+        Bold
+      </button>
+      <button onClick={() => console.log(helpers.getJSON())}>
+        Get JSON
+      </button>
+      <span>
+        {active.bold() ? 'Bold is active' : 'Bold is inactive'}
+      </span>
+    </div>
+  );
+};
+```
+
+```tsx Auto Update
+import { useRemirrorContext } from '@remirror/react';
+
+const BoldButton = () => {
+  // Re-renders on every editor update
+  const { active, commands } = useRemirrorContext({ autoUpdate: true });
+  
+  return (
+    <button
+      onClick={() => commands.toggleBold()}
+      style={{ fontWeight: active.bold() ? 'bold' : 'normal' }}
+    >
+      Bold
+    </button>
+  );
+};
+```
+
+```tsx Custom Update Handler
+import { useState } from 'react';
+import { useRemirrorContext } from '@remirror/react';
+
+const BoldButton = () => {
+  const [isBold, setIsBold] = useState(false);
+  
+  // Custom logic to determine when to re-render
+  const { active, commands } = useRemirrorContext(() => {
+    const boldState = active.bold();
+    if (boldState !== isBold) {
+      setIsBold(boldState);
+    }
+  });
+  
+  return (
+    <button
+      onClick={() => commands.toggleBold()}
+      aria-pressed={isBold}
+    >
+      Bold
+    </button>
+  );
+};
+```
+
+```tsx Full Context Access
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorDebug = () => {
+  const context = useRemirrorContext();
+  
+  const logEditorInfo = () => {
+    console.log('Manager:', context.manager);
+    console.log('State:', context.getState());
+    console.log('View:', context.view);
+    console.log('Commands:', Object.keys(context.commands));
+  };
+  
+  return (
+    <button onClick={logEditorInfo}>
+      Log Editor Info
+    </button>
+  );
+};
+```
+</CodeGroup>
+
+<Warning>
+  `useRemirrorContext` will throw an error if used outside of a `<Remirror />` component. Always ensure your components are wrapped by the Remirror provider.
+</Warning>
+
+### Context Update Strategies
+
+Remirror provides three strategies for managing context updates:
+
+<Tabs>
+  <Tab title="No Updates (Default)">
+    **Best for**: Static toolbars, components that don't depend on editor state.
+    
+    ```tsx
+    const Toolbar = () => {
+      const { commands } = useRemirrorContext();
+      
+      // This component never re-renders on editor updates
+      return (
+        <button onClick={() => commands.toggleBold()}>
+          Bold
+        </button>
+      );
+    };
+    ```
+    
+    **Performance**: Optimal - no re-renders on state changes.
+  </Tab>
+  
+  <Tab title="Auto Update">
+    **Best for**: Dynamic UI that reflects current editor state.
+    
+    ```tsx
+    const DynamicToolbar = () => {
+      const { commands, active } = useRemirrorContext({ autoUpdate: true });
+      
+      // Re-renders on EVERY editor update (selection + document changes)
+      return (
+        <button
+          onClick={() => commands.toggleBold()}
+          disabled={active.bold()}
+        >
+          Bold
+        </button>
+      );
+    };
+    ```
+    
+    **Performance**: Lower - re-renders on every editor change.
+  </Tab>
+  
+  <Tab title="Custom Handler">
+    **Best for**: Optimized updates based on specific conditions.
+    
+    ```tsx
+    const OptimizedButton = () => {
+      const [isBold, setIsBold] = useState(false);
+      
+      const { commands } = useRemirrorContext(() => {
+        // Only update state when bold status actually changes
+        const boldActive = active.bold();
+        if (boldActive !== isBold) {
+          setIsBold(boldActive);
+        }
+      });
+      
+      return (
+        <button onClick={() => commands.toggleBold()}>
+          {isBold ? 'Bold (Active)' : 'Bold'}
+        </button>
+      );
+    };
+    ```
+    
+    **Performance**: Balanced - only re-renders when specific conditions are met.
+  </Tab>
+</Tabs>
+
+## Context Providers
+
+### Remirror Provider
+
+Automatically created when using the `<Remirror />` component:
+
+```tsx File: react-remirror.tsx
+import { Remirror, useRemirror } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+const App = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager}>
+      {/* All children have access to RemirrorContext */}
+      <Toolbar />
+      <EditorContent />
+      <StatusBar />
+    </Remirror>
+  );
+};
+```
+
+### I18n Provider
+
+Provides internationalization context:
+
+```tsx File: contexts/i18n-context.tsx
+import { I18nProvider, I18nContext } from '@remirror/react';
+import { useContext } from 'react';
+
+const LocalizedComponent = () => {
+  const t = useContext(I18nContext);
+  
+  return (
+    <div>
+      {t({ id: 'editor.bold', message: 'Bold' })}
+    </div>
+  );
+};
+
+const App = () => {
+  return (
+    <I18nProvider locale="en" supportedLocales={['en', 'es']}>
+      <LocalizedComponent />
+    </I18nProvider>
+  );
+};
+```
+
+<Note>
+  When using `<Remirror />`, the `I18nProvider` is automatically included. You only need to use it directly for custom setups.
+</Note>
+
+## Context Methods
+
+### getRootProps
+
+Returns props to spread on the element where the editor should be mounted:
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorWrapper = () => {
+  const { getRootProps } = useRemirrorContext();
+  
+  return (
+    <div {...getRootProps()} />
+  );
+};
+```
+
+#### With Custom Ref
+
+```tsx
+import { useRef } from 'react';
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorWithRef = () => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const { getRootProps } = useRemirrorContext();
+  
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+    }
+  }, []);
+  
+  return <div {...getRootProps({ ref: editorRef })} />;
+};
+```
+
+#### With Additional Props
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const StyledEditor = () => {
+  const { getRootProps } = useRemirrorContext();
+  
+  return (
+    <div
+      {...getRootProps({
+        className: 'my-editor',
+        style: { minHeight: '300px' },
+        'aria-label': 'Main editor',
+      })}
+    />
+  );
+};
+```
+
+#### Custom Ref Key
+
+For components that use non-standard ref props:
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const CustomComponentEditor = () => {
+  const { getRootProps } = useRemirrorContext();
+  
+  return (
+    <CustomComponent
+      {...getRootProps({ refKey: 'innerRef' })}
+    />
+  );
+};
+```
+
+### addHandler
+
+Add event listeners to editor events:
+
+```tsx
+import { useEffect } from 'react';
+import { useRemirrorContext } from '@remirror/react';
+
+const ChangeLogger = () => {
+  const { addHandler } = useRemirrorContext();
+  
+  useEffect(() => {
+    // Returns a dispose function
+    return addHandler('updated', ({ state }) => {
+      console.log('Editor updated:', state);
+    });
+  }, [addHandler]);
+  
+  return null;
+};
+```
+
+## Context Composition
+
+### Combining Multiple Contexts
+
+```tsx
+import { createContext, useContext } from 'react';
+import { Remirror, useRemirror, useRemirrorContext } from '@remirror/react';
+
+// Custom application context
+const AppContext = createContext({ theme: 'light' });
+
+const ThemedToolbar = () => {
+  const { theme } = useContext(AppContext);
+  const { commands, active } = useRemirrorContext({ autoUpdate: true });
+  
+  return (
+    <div className={`toolbar-${theme}`}>
+      <button
+        onClick={() => commands.toggleBold()}
+        disabled={active.bold()}
+      >
+        Bold
+      </button>
+    </div>
+  );
+};
+
+const App = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <AppContext.Provider value={{ theme: 'dark' }}>
+      <Remirror manager={manager}>
+        <ThemedToolbar />
+      </Remirror>
+    </AppContext.Provider>
+  );
+};
+```
+
+### Cross-Context Communication
+
+```tsx
+import { createContext, useContext, useState } from 'react';
+import { Remirror, useRemirror, useRemirrorContext } from '@remirror/react';
+
+interface EditorStateContext {
+  wordCount: number;
+  setWordCount: (count: number) => void;
+}
+
+const StateContext = createContext<EditorStateContext | null>(null);
+
+const WordCounter = () => {
+  const { helpers } = useRemirrorContext({ autoUpdate: true });
+  const context = useContext(StateContext);
+  
+  useEffect(() => {
+    const text = helpers.getText();
+    const count = text.split(/\s+/).filter(Boolean).length;
+    context?.setWordCount(count);
+  }, [helpers, context]);
+  
+  return null;
+};
+
+const StatusBar = () => {
+  const context = useContext(StateContext);
+  return <div>Words: {context?.wordCount || 0}</div>;
+};
+
+const App = () => {
+  const [wordCount, setWordCount] = useState(0);
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <StateContext.Provider value={{ wordCount, setWordCount }}>
+      <Remirror manager={manager}>
+        <WordCounter />
+        <StatusBar />
+      </Remirror>
+    </StateContext.Provider>
+  );
+};
+```
+
+## Type Safety
+
+### Typed Context Hook
+
+Create type-safe context hooks for specific extension sets:
+
+```tsx
+import { useRemirrorContext, UseRemirrorContextType } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+// Create typed hook
+const useWysiwygContext = useRemirrorContext as UseRemirrorContextType<WysiwygPreset>;
+
+const Editor = () => {
+  const { commands } = useWysiwygContext();
+  
+  // Full IntelliSense for all WysiwygPreset commands
+  commands.toggleBold();
+  commands.toggleItalic();
+  commands.toggleHeading({ level: 1 });
+  
+  return null;
+};
+```
+
+### Generic Context Types
+
+```tsx
+import type { ReactFrameworkOutput } from '@remirror/react';
+import { BoldExtension, ItalicExtension } from 'remirror/extensions';
+
+type MyExtensions = BoldExtension | ItalicExtension;
+type MyContext = ReactFrameworkOutput<MyExtensions>;
+
+const useMyEditor = (): MyContext => {
+  return useRemirrorContext<MyExtensions>();
+};
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Minimize Re-renders" icon="gauge-high">
+    Only use `autoUpdate: true` when necessary. Most toolbar buttons don't need to re-render on every state change.
+  </Card>
+  
+  <Card title="Use Specialized Hooks" icon="puzzle-piece">
+    Prefer hooks like `useCommands()`, `useActive()`, etc. over `useRemirrorContext()` for better code clarity.
+  </Card>
+  
+  <Card title="Error Boundaries" icon="shield-halved">
+    Wrap Remirror components in error boundaries to gracefully handle context errors.
+  </Card>
+  
+  <Card title="Type Safety" icon="shield-check">
+    Use TypeScript generics to get full type inference for your custom extensions.
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Conditional Rendering Based on Extensions
+
+```tsx
+import { useHasExtension } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const BoldButton = () => {
+  const hasBold = useHasExtension(BoldExtension);
+  const { commands } = useRemirrorContext();
+  
+  if (!hasBold) return null;
+  
+  return (
+    <button onClick={() => commands.toggleBold()}>
+      Bold
+    </button>
+  );
+};
+```
+
+### Accessing Context Outside Render
+
+```tsx
+import { useRemirror } from '@remirror/react';
+
+const App = () => {
+  const { manager, getContext } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  const handleExternalAction = () => {
+    // Access context after mount
+    const context = getContext();
+    if (context) {
+      context.commands.toggleBold();
+    }
+  };
+  
+  return (
+    <>
+      <button onClick={handleExternalAction}>
+        Toggle Bold Externally
+      </button>
+      <Remirror manager={manager} />
+    </>
+  );
+};
+```
+
+### Event-Driven Updates
+
+```tsx
+import { useEffect } from 'react';
+import { useRemirrorContext } from '@remirror/react';
+
+const AutoSave = () => {
+  const { addHandler, helpers } = useRemirrorContext();
+  
+  useEffect(() => {
+    return addHandler('updated', ({ state }) => {
+      // Debounce this in production
+      const json = helpers.getJSON(state);
+      saveToBackend(json);
+    });
+  }, [addHandler, helpers]);
+  
+  return null;
+};
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: Cannot read properties of null (reading 'commands')">
+    This error occurs when using Remirror hooks outside of a `<Remirror />` component.
+    
+    **Solution**: Ensure all components using Remirror hooks are children of `<Remirror />`.
+  </Accordion>
+  
+  <Accordion title="Component not re-rendering on editor changes">
+    By default, `useRemirrorContext()` doesn't trigger re-renders.
+    
+    **Solution**: Pass `{ autoUpdate: true }` or use a custom handler function.
+  </Accordion>
+  
+  <Accordion title="Type errors with custom extensions">
+    TypeScript may not infer types correctly for custom extension combinations.
+    
+    **Solution**: Use explicit type annotations with `UseRemirrorContextType<YourExtensions>`.
+  </Accordion>
+  
+  <Accordion title="getRootProps not mounting editor">
+    The editor may not render if `getRootProps` is spread on a component with children.
+    
+    **Solution**: Spread `getRootProps()` on an empty element: `<div {...getRootProps()} />`
+  </Accordion>
+</AccordionGroup>

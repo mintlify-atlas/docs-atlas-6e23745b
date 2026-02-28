@@ -1,0 +1,584 @@
+---
+title: React Hooks
+description: Complete guide to Remirror React hooks for building custom editor interfaces
+---
+
+Remirror provides a comprehensive set of React hooks that give you direct access to the editor's state, commands, and functionality. These hooks can only be used within components that are children of the `<Remirror />` component.
+
+## Core Hooks
+
+### useRemirrorContext
+
+The foundational hook that provides access to the entire Remirror context.
+
+<ParamField path="handler" type="RemirrorEventListener | { autoUpdate: boolean }" default="undefined">
+  Optional parameter to control re-rendering behavior:
+  - Pass `{ autoUpdate: true }` to re-render on every editor update
+  - Pass a function to manually control when to re-render
+  - Pass nothing for no automatic re-renders (better performance)
+</ParamField>
+
+<CodeGroup>
+```tsx Basic Usage
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorComponent = () => {
+  const { getRootProps } = useRemirrorContext();
+  return <div {...getRootProps()} />;
+};
+```
+
+```tsx Auto-Update
+const EditorButton = () => {
+  const { active, commands } = useRemirrorContext({ autoUpdate: true });
+  
+  return (
+    <button style={{ fontWeight: active.bold() ? 'bold' : undefined }}>
+      B
+    </button>
+  );
+};
+```
+
+```tsx Custom Handler
+const EditorButton = () => {
+  const [boldActive, setBoldActive] = useState(false);
+  
+  const { active, commands } = useRemirrorContext(() => {
+    if (active.bold() !== boldActive) {
+      setBoldActive(active.bold());
+    }
+  });
+  
+  return (
+    <button style={{ fontWeight: boldActive ? 'bold' : undefined }}>
+      B
+    </button>
+  );
+};
+```
+</CodeGroup>
+
+<Note>
+  For performance reasons, `useRemirrorContext` does NOT automatically trigger re-renders. Use the `autoUpdate` option or a custom handler when you need to track editor state changes.
+</Note>
+
+### useRemirror
+
+A powerful hook that gives you total control over editor creation and state management.
+
+<ParamField path="extensions" type="() => Extension[] | RemirrorManager">
+  Function that returns an array of extensions, or a RemirrorManager instance
+</ParamField>
+
+<ParamField path="content" type="string | ProsemirrorNode | RemirrorJSON">
+  Initial content for the editor
+</ParamField>
+
+<ParamField path="selection" type="Selection">
+  Initial selection position
+</ParamField>
+
+<ParamField path="stringHandler" type="StringHandler">
+  Function to transform strings into ProseMirror nodes
+</ParamField>
+
+<ParamField path="onError" type="InvalidContentHandler">
+  Handler for invalid content errors
+</ParamField>
+
+**Returns:**
+- `manager` - The RemirrorManager instance
+- `state` - Current editor state
+- `setState` - Function to update the state
+- `onChange` - Convenience callback for state updates
+- `getContext` - Function to retrieve the React framework context
+
+<CodeGroup>
+```tsx Basic Editor
+import { useRemirror } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const Editor = () => {
+  const { manager, state, onChange } = useRemirror({
+    extensions: () => [new BoldExtension()],
+    content: '<p>Hello world!</p>',
+    stringHandler: 'html',
+  });
+  
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={onChange}
+    />
+  );
+};
+```
+
+```tsx Controlled Editor
+import { useCallback } from 'react';
+import { useRemirror } from '@remirror/react';
+
+const ControlledEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+  
+  const handleChange = useCallback(
+    ({ state }) => {
+      setState(state);
+      // Perform additional logic
+    },
+    [setState]
+  );
+  
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={handleChange}
+    />
+  );
+};
+```
+
+```tsx Error Handling
+import { useCallback } from 'react';
+import { useRemirror } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+const EditorWithValidation = () => {
+  const onError = useCallback(({ json, invalidContent, transformers }) => {
+    // Automatically remove all invalid nodes and marks
+    return transformers.remove(json, invalidContent);
+  }, []);
+  
+  const { manager, state, onChange } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+    onError,
+  });
+  
+  return <Remirror manager={manager} state={state} onChange={onChange} />;
+};
+```
+</CodeGroup>
+
+## Command Hooks
+
+### useCommands
+
+Provides access to all editor commands from your extensions.
+
+```tsx File: hooks/use-commands.ts
+import { useCommands } from '@remirror/react';
+
+const EditorButton = () => {
+  const commands = useCommands();
+  
+  return (
+    <>
+      <button onClick={() => commands.toggleBold()}>
+        Toggle Bold
+      </button>
+      <button onClick={() => commands.insertText('Hello!')}>
+        Insert Text
+      </button>
+    </>
+  );
+};
+```
+
+### useChainedCommands
+
+Provides chainable commands that can be executed in sequence.
+
+```tsx File: hooks/use-chained-commands.ts
+import { useChainedCommands } from '@remirror/react';
+
+const EditorButton = () => {
+  const chain = useChainedCommands();
+  
+  return (
+    <button onClick={() => chain.toggleBold().toggleItalic().run()}>
+      Bold + Italic
+    </button>
+  );
+};
+```
+
+<Note>
+  Chained commands must end with `.run()` to execute. This allows you to build complex command sequences before execution.
+</Note>
+
+## State Hooks
+
+### useEditorState
+
+Returns the current editor state and re-renders on every update.
+
+```tsx File: hooks/use-editor-state.ts
+import { useEditorState } from '@remirror/react';
+
+const EditorInfo = () => {
+  const state = useEditorState();
+  
+  return (
+    <div>
+      Document size: {state.doc.nodeSize}
+    </div>
+  );
+};
+```
+
+<Warning>
+  This hook triggers a re-render on every editor update. Use sparingly for performance-critical components.
+</Warning>
+
+### useEditorView
+
+Provides direct access to the ProseMirror EditorView instance.
+
+```tsx File: hooks/use-editor-view.ts
+import { useEditorView } from '@remirror/react';
+
+const EditorDebug = () => {
+  const view = useEditorView();
+  
+  return (
+    <button onClick={() => console.log(view.state)}>
+      Log State
+    </button>
+  );
+};
+```
+
+### useCurrentSelection
+
+Returns the current selection and re-renders when it changes.
+
+```tsx File: hooks/use-current-selection.ts
+import { useCurrentSelection } from '@remirror/react';
+
+const SelectionInfo = () => {
+  const selection = useCurrentSelection();
+  
+  return (
+    <div>
+      Selection from {selection.from} to {selection.to}
+    </div>
+  );
+};
+```
+
+## Active State Hooks
+
+### useActive
+
+Check which marks and nodes are active at the current selection.
+
+<ParamField path="autoUpdate" type="boolean" default="true">
+  Whether to automatically re-render on state updates
+</ParamField>
+
+```tsx File: hooks/use-active.ts
+import { useActive } from '@remirror/react';
+
+const FormatToolbar = () => {
+  const active = useActive();
+  
+  return (
+    <div>
+      <button disabled={!active.bold()}>
+        {active.bold() ? 'Bold (Active)' : 'Bold'}
+      </button>
+      <button disabled={!active.italic()}>
+        {active.italic() ? 'Italic (Active)' : 'Italic'}
+      </button>
+      <button disabled={!active.heading({ level: 1 })}>
+        H1
+      </button>
+    </div>
+  );
+};
+```
+
+### useAttrs
+
+Retrieve attributes of nodes and marks at the current selection.
+
+<ParamField path="update" type="boolean" default="false">
+  Whether to automatically re-render on state updates
+</ParamField>
+
+```tsx File: hooks/use-attrs.ts
+import { useAttrs } from '@remirror/react';
+
+const LinkEditor = () => {
+  const attrs = useAttrs(true);
+  const { link } = attrs;
+  
+  return (
+    <div>
+      {link?.href && (
+        <a href={link.href} target="_blank" rel="noopener">
+          {link.href}
+        </a>
+      )}
+    </div>
+  );
+};
+```
+
+## Helper Hooks
+
+### useHelpers
+
+Provides access to helper methods from your extensions.
+
+<ParamField path="update" type="boolean" default="false">
+  Whether to automatically re-render on state updates
+</ParamField>
+
+```tsx File: hooks/use-helpers.ts
+import { useHelpers } from '@remirror/react';
+
+const EditorTools = () => {
+  const helpers = useHelpers();
+  
+  return (
+    <>
+      <button onClick={() => console.log(helpers.getJSON())}>
+        Get JSON
+      </button>
+      <button onClick={() => console.log(helpers.getHTML())}>
+        Get HTML
+      </button>
+      <button onClick={() => console.log(helpers.getText())}>
+        Get Text
+      </button>
+    </>
+  );
+};
+```
+
+## Extension Hooks
+
+### useExtension
+
+Dynamically update extension properties or access extension instances.
+
+<Tabs>
+  <Tab title="Get Extension">
+    ```tsx
+    import { useExtension } from '@remirror/react';
+    import { BoldExtension } from 'remirror/extensions';
+    
+    const Editor = () => {
+      const boldExtension = useExtension(BoldExtension);
+      
+      boldExtension.setOptions({ weight: '800' });
+      
+      return null;
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Update Properties">
+    ```tsx
+    import { useExtension } from '@remirror/react';
+    import { PlaceholderExtension } from 'remirror/extensions';
+    
+    const EditorPlaceholder = ({ placeholder = 'Your magnum opus' }) => {
+      useExtension(PlaceholderExtension, { placeholder });
+      return null;
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Add Handlers">
+    ```tsx
+    import { useCallback } from 'react';
+    import { useExtension } from '@remirror/react';
+    import { HistoryExtension } from 'remirror/extensions';
+    
+    const Editor = () => {
+      useExtension(
+        HistoryExtension,
+        useCallback(({ addHandler }) => {
+          return addHandler('onRedo', () => console.log('Redo!'));
+        }, []),
+      );
+      
+      return null;
+    };
+    ```
+  </Tab>
+</Tabs>
+
+### useExtensionEvent
+
+Dynamically add event handlers to specific extension events.
+
+```tsx File: hooks/use-extension-event.ts
+import { useCallback } from 'react';
+import { useExtensionEvent } from '@remirror/react';
+import { HistoryExtension } from 'remirror/extensions';
+
+const RedoLogger = () => {
+  useExtensionEvent(
+    HistoryExtension,
+    'onRedo',
+    useCallback(() => console.log('A redo just happened'), []),
+  );
+  
+  return null;
+};
+```
+
+### useHasExtension
+
+Check if a specific extension is present in the editor.
+
+```tsx
+import { useHasExtension } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const BoldButton = () => {
+  const hasBold = useHasExtension(BoldExtension);
+  
+  if (!hasBold) return null;
+  
+  return <button>Toggle Bold</button>;
+};
+```
+
+## Event Hooks
+
+### useDocChanged
+
+Subscribe to document change events.
+
+```tsx File: hooks/use-doc-changed.ts
+import { useCallback } from 'react';
+import { useDocChanged } from '@remirror/react';
+
+const ChangeLogger = () => {
+  useDocChanged(
+    useCallback(({ state, previousState }) => {
+      console.log('Document changed!');
+      console.log('New state:', state);
+      console.log('Previous state:', previousState);
+    }, []),
+  );
+  
+  return null;
+};
+```
+
+## Utility Hooks
+
+### useManager
+
+Create and manage a RemirrorManager instance.
+
+```tsx File: hooks/use-manager.ts
+import { useManager } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+import { CorePreset } from 'remirror/presets';
+
+const Editor = () => {
+  const manager = useManager(() => [
+    new BoldExtension(),
+    new CorePreset(),
+  ]);
+  
+  return (
+    <Remirror manager={manager}>
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+<Note>
+  The manager is a singleton and doesn't re-render until `manager.destroy()` is called. This is intentional for performance.
+</Note>
+
+### useEditorDomRef
+
+Get a ref to the editor's DOM element.
+
+```tsx
+import { useEditorDomRef } from '@remirror/react';
+
+const EditorWrapper = () => {
+  const editorRef = useEditorDomRef();
+  
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+    }
+  }, [editorRef]);
+  
+  return null;
+};
+```
+
+### useI18n
+
+Access the internationalization formatter.
+
+```tsx
+import { useI18n } from '@remirror/react';
+
+const LocalizedComponent = () => {
+  const { t, locale } = useI18n();
+  
+  return (
+    <div>
+      Current locale: {locale}
+    </div>
+  );
+};
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="gauge-high">
+    Only use `autoUpdate` hooks when necessary. For static toolbars, use hooks without automatic updates.
+  </Card>
+  
+  <Card title="Memoization" icon="memory">
+    Memoize callbacks with `useCallback` and objects with `useMemo` to prevent unnecessary re-renders.
+  </Card>
+  
+  <Card title="Context Scope" icon="circle-nodes">
+    All hooks must be used within a `<Remirror />` component. Using them outside will throw an error.
+  </Card>
+  
+  <Card title="Type Safety" icon="shield-check">
+    Use TypeScript generics to get full type inference for your custom extensions.
+  </Card>
+</CardGroup>
+
+## Type Aliases
+
+For better TypeScript support with custom extensions:
+
+```tsx
+import { useRemirrorContext, UseRemirrorContextType } from '@remirror/react';
+import { SocialPreset } from 'remirror/extensions';
+
+const useSocialRemirror = useRemirrorContext as UseRemirrorContextType<SocialPreset>;
+
+const Editor = () => {
+  const { commands } = useSocialRemirror();
+  
+  // All available commands are shown with IntelliSense
+  commands.toggleBold();
+  
+  return null;
+};
+```

@@ -1,0 +1,476 @@
+---
+title: Static Rendering & Read-Only Mode
+description: Learn how to render Remirror documents as static HTML or in read-only mode for viewing content
+---
+
+# Static Rendering & Read-Only Mode
+
+There are many use cases where you need to display Remirror content without editing capabilities:
+
+- **Different users**: Authors create content that readers view (e.g., blog posts, articles)
+- **Different contexts**: Users want to review their content without accidentally editing it
+- **Performance**: Rendering static HTML is lighter than a full editor
+
+## Read-Only Editor
+
+The simplest option is to set the editor as read-only using the `editable` prop:
+
+```tsx
+import React from 'react';
+import { Remirror, useRemirror } from '@remirror/react';
+import { wysiwygPreset } from 'remirror/extensions';
+
+const ReadOnlyEditor = ({ content }) => {
+  const { manager, state } = useRemirror({
+    extensions: () => [...wysiwygPreset()],
+    content,
+    stringHandler: 'html',
+  });
+
+  return (
+    <div className='remirror-theme'>
+      <Remirror 
+        manager={manager} 
+        initialContent={state} 
+        editable={false} 
+      />
+    </div>
+  );
+};
+```
+
+<CardGroup cols={2}>
+  <Card title="Pros" icon="check">
+    - Identical rendering to editable mode
+    - Maintains all styling and formatting
+    - Extensions still work for display
+    - Simple to implement
+  </Card>
+  
+  <Card title="Cons" icon="xmark">
+    - Same performance cost as editable editor
+    - Loads full ProseMirror editor
+    - Uses more memory
+  </Card>
+</CardGroup>
+
+### Toggle Editable Mode
+
+You can dynamically toggle between read-only and editable:
+
+```tsx
+import { useState } from 'react';
+import { Remirror, useRemirror } from '@remirror/react';
+
+const ToggleableEditor = ({ content }) => {
+  const [editable, setEditable] = useState(false);
+  const { manager, state } = useRemirror({
+    extensions: () => [...wysiwygPreset()],
+    content,
+    stringHandler: 'html',
+  });
+
+  return (
+    <div>
+      <button onClick={() => setEditable(!editable)}>
+        {editable ? 'View Mode' : 'Edit Mode'}
+      </button>
+      
+      <div className='remirror-theme'>
+        <Remirror 
+          manager={manager} 
+          initialContent={state} 
+          editable={editable}
+        />
+      </div>
+    </div>
+  );
+};
+```
+
+## React Renderer (Static HTML)
+
+For better performance, use the React renderer to render documents directly to HTML without the editor:
+
+```tsx
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import type { RemirrorJSON } from 'remirror';
+
+interface StaticContentProps {
+  json: RemirrorJSON;
+}
+
+const StaticContent = ({ json }: StaticContentProps) => {
+  return (
+    <div className='remirror-theme'>
+      <RemirrorRenderer json={json} />
+    </div>
+  );
+};
+```
+
+<CardGroup cols={2}>
+  <Card title="Pros" icon="check">
+    - Much better performance
+    - Smaller bundle size
+    - Lower memory usage
+    - Direct HTML rendering
+  </Card>
+  
+  <Card title="Cons" icon="xmark">
+    - May render differently from editor
+    - Requires implementing custom node handlers
+    - Limited to supported node types
+  </Card>
+</CardGroup>
+
+### Supported Node Types
+
+The renderer supports common Remirror nodes out of the box:
+
+- **Blocks**: `paragraph`, `heading`, `blockquote`, `codeBlock`, `horizontalRule`
+- **Lists**: `bulletList`, `orderedList`
+- **Inline**: `text`, `hardBreak`, `image`, `iframe`
+- **Special**: `doc`, `callout`
+
+**Marks** (formatting):
+- `bold`, `italic`, `underline`, `code`, `link`
+
+### Using with HTML Content
+
+Convert HTML to JSON first, then render:
+
+```tsx
+import { useEffect, useState } from 'react';
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import { htmlToDoc } from 'remirror';
+import type { RemirrorJSON } from 'remirror';
+
+const HtmlRenderer = ({ html }) => {
+  const [json, setJson] = useState<RemirrorJSON | null>(null);
+
+  useEffect(() => {
+    // Convert HTML to JSON
+    const doc = htmlToDoc(html);
+    setJson(doc.toJSON());
+  }, [html]);
+
+  if (!json) return <div>Loading...</div>;
+
+  return <RemirrorRenderer json={json} />;
+};
+```
+
+### Custom Node Handlers
+
+Implement custom rendering for unsupported or custom node types:
+
+```tsx
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import type { MarkMap } from '@remirror/react-renderer';
+
+// Custom handler for a custom node type
+const CustomBlock = ({ node }) => {
+  return (
+    <div className="custom-block" style={{ background: node.attrs.color }}>
+      {node.content?.map((child, i) => (
+        <RemirrorRenderer key={i} json={child} />
+      ))}
+    </div>
+  );
+};
+
+const customTypeMap: MarkMap = {
+  customBlock: CustomBlock,
+};
+
+const StaticContent = ({ json }) => {
+  return (
+    <RemirrorRenderer 
+      json={json} 
+      typeMap={customTypeMap}
+    />
+  );
+};
+```
+
+### Custom Mark Handlers
+
+Customize how marks (formatting) are rendered:
+
+```tsx
+import type { MarkMap } from '@remirror/react-renderer';
+
+const CustomLink = ({ node, children }) => {
+  return (
+    <a 
+      href={node.attrs.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="custom-link"
+    >
+      {children}
+    </a>
+  );
+};
+
+const customMarkMap: MarkMap = {
+  link: CustomLink,
+};
+
+const StaticContent = ({ json }) => {
+  return (
+    <RemirrorRenderer 
+      json={json} 
+      markMap={customMarkMap}
+    />
+  );
+};
+```
+
+## Complete Example
+
+Here's a complete example with both modes:
+
+```tsx
+import { useState } from 'react';
+import type { RemirrorJSON } from 'remirror';
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import { Remirror, useRemirror } from '@remirror/react';
+import { wysiwygPreset } from 'remirror/extensions';
+
+type ViewMode = 'static' | 'readonly' | 'edit';
+
+interface ContentViewerProps {
+  json: RemirrorJSON;
+  initialMode?: ViewMode;
+}
+
+const ContentViewer = ({ json, initialMode = 'static' }: ContentViewerProps) => {
+  const [mode, setMode] = useState<ViewMode>(initialMode);
+  
+  const { manager, state } = useRemirror({
+    extensions: () => [...wysiwygPreset()],
+    content: json,
+  });
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <button 
+          onClick={() => setMode('static')}
+          disabled={mode === 'static'}
+        >
+          Static HTML
+        </button>
+        <button 
+          onClick={() => setMode('readonly')}
+          disabled={mode === 'readonly'}
+        >
+          Read-Only Editor
+        </button>
+        <button 
+          onClick={() => setMode('edit')}
+          disabled={mode === 'edit'}
+        >
+          Edit Mode
+        </button>
+      </div>
+
+      {mode === 'static' ? (
+        <div className='remirror-theme'>
+          <RemirrorRenderer json={json} />
+        </div>
+      ) : (
+        <div className='remirror-theme'>
+          <Remirror
+            manager={manager}
+            initialContent={state}
+            editable={mode === 'edit'}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+## Styling Static Content
+
+Static rendered content uses the same CSS classes:
+
+```css
+/* Apply same styles to static content */
+.remirror-theme h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 0.67em 0;
+}
+
+.remirror-theme p {
+  margin: 1em 0;
+}
+
+.remirror-theme code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.remirror-theme pre {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 16px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+```
+
+## Server-Side Rendering (SSR)
+
+The React renderer works great with SSR:
+
+```tsx
+// pages/article/[id].tsx (Next.js example)
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import type { RemirrorJSON } from 'remirror';
+
+interface ArticleProps {
+  article: {
+    title: string;
+    content: RemirrorJSON;
+  };
+}
+
+export default function Article({ article }: ArticleProps) {
+  return (
+    <article>
+      <h1>{article.title}</h1>
+      <div className='remirror-theme'>
+        <RemirrorRenderer json={article.content} />
+      </div>
+    </article>
+  );
+}
+
+export async function getServerSideProps({ params }) {
+  const article = await fetchArticle(params.id);
+  
+  return {
+    props: {
+      article,
+    },
+  };
+}
+```
+
+<Note>
+  The React renderer is fully compatible with server-side rendering frameworks like Next.js, Remix, and Gatsby.
+</Note>
+
+## Error Handling
+
+Handle unknown or unsupported node types gracefully:
+
+```tsx
+import { RemirrorRenderer } from '@remirror/react-renderer';
+
+const SafeRenderer = ({ json }) => {
+  return (
+    <RemirrorRenderer
+      json={json}
+      skipUnknownTypes={true}  // Skip unsupported nodes
+      skipUnknownMarks={true}  // Skip unsupported marks
+    />
+  );
+};
+```
+
+Or handle errors explicitly:
+
+```tsx
+import { RemirrorRenderer } from '@remirror/react-renderer';
+import { useState } from 'react';
+
+const SafeRenderer = ({ json }) => {
+  const [error, setError] = useState<Error | null>(null);
+
+  if (error) {
+    return (
+      <div className="error">
+        Failed to render content: {error.message}
+      </div>
+    );
+  }
+
+  try {
+    return <RemirrorRenderer json={json} />;
+  } catch (err) {
+    setError(err as Error);
+    return null;
+  }
+};
+```
+
+## Performance Comparison
+
+| Method | Bundle Size | Memory | First Render | Use Case |
+|--------|-------------|--------|--------------|----------|
+| Static Renderer | ~50KB | Low | Fast | Articles, blog posts, comments |
+| Read-Only Editor | ~200KB | High | Slower | Review mode, preview |
+| Editable Editor | ~200KB | High | Slower | Actual editing |
+
+<Tip>
+  Use static rendering for public-facing content and read-only mode for authenticated users who might need to edit.
+</Tip>
+
+## Limitations
+
+<Warning>
+  The React renderer has limitations:
+  
+  - Not all node types are supported by default
+  - Custom nodes require custom handlers
+  - Some complex extensions may not render correctly
+  - Interactive features (like mentions) won't work
+</Warning>
+
+<Note>
+  If you need a node type that isn't supported, [file an issue](https://github.com/remirror/remirror/issues) or submit a PR to add support.
+</Note>
+
+## When to Use Each Approach
+
+<Steps>
+  <Step title="Use Static Renderer When:">
+    - Displaying public content (blogs, articles)
+    - Performance is critical
+    - Content is view-only
+    - SSR/SSG is important
+  </Step>
+
+  <Step title="Use Read-Only Editor When:">
+    - Need identical rendering to edit mode
+    - Using complex custom extensions
+    - Toggling between view and edit
+    - Perfect visual consistency required
+  </Step>
+
+  <Step title="Use Editable Editor When:">
+    - Actually editing content
+    - User interaction required
+    - Real-time collaboration
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building Custom Editor" icon="code" href="/guides/building-custom-editor">
+    Learn how to build custom editors
+  </Card>
+  <Card title="Styling" icon="palette" href="/guides/styling">
+    Style your rendered content
+  </Card>
+</CardGroup>

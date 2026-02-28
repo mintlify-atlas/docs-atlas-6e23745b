@@ -1,0 +1,558 @@
+---
+title: React Components
+description: Core React components for building Remirror editors
+---
+
+Remirror provides essential React components that serve as the foundation for building rich text editors. These components handle the integration between React and ProseMirror.
+
+## Core Components
+
+### Remirror
+
+The main component that provides the Remirror context to all child components.
+
+<ParamField path="manager" type="RemirrorManager" required>
+  The RemirrorManager instance that composes your extensions and provides editor functionality.
+</ParamField>
+
+<ParamField path="children" type="ReactNode">
+  Child components that will have access to the Remirror context.
+</ParamField>
+
+<ParamField path="autoRender" type="boolean | 'start' | 'end'" default="undefined">
+  Automatically render the editor to the DOM:
+  - `'start'` - Render editor before child components (recommended)
+  - `'end'` - Render editor after child components
+  - `true` - Same as `'start'`
+  - When no children are provided, the editor renders automatically
+</ParamField>
+
+<ParamField path="hooks" type="Array<() => void>">
+  Array of hooks to be called within the Remirror context. Useful for side effects.
+</ParamField>
+
+<ParamField path="initialContent" type="string | ProsemirrorNode | RemirrorJSON">
+  Initial content for the editor.
+</ParamField>
+
+<ParamField path="editable" type="boolean" default="true">
+  Whether the editor is editable.
+</ParamField>
+
+<ParamField path="placeholder" type="string">
+  Placeholder text when the editor is empty.
+</ParamField>
+
+<ParamField path="classNames" type="string[]">
+  CSS class names to apply to the editor.
+</ParamField>
+
+<ParamField path="state" type="EditorState">
+  Controlled editor state. Use with `onChange` for controlled editors.
+</ParamField>
+
+<ParamField path="onChange" type="RemirrorEventListener">
+  Callback fired when the editor state changes.
+</ParamField>
+
+#### Internationalization Props
+
+<ParamField path="i18nFormat" type="I18nFormatter">
+  Function that formats ICU MessageFormat encoded messages via your i18n solution.
+</ParamField>
+
+<ParamField path="locale" type="string" default="'en'">
+  Current locale for the editor.
+</ParamField>
+
+<ParamField path="supportedLocales" type="string[]">
+  Array of supported locales. Defaults to `[locale]`.
+</ParamField>
+
+<CodeGroup>
+```tsx Basic Editor
+import { Remirror, useRemirror } from '@remirror/react';
+import { BoldExtension } from 'remirror/extensions';
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new BoldExtension()],
+  });
+  
+  return (
+    <Remirror manager={manager}>
+      {/* Editor auto-renders when no children */}
+    </Remirror>
+  );
+};
+```
+
+```tsx With Custom Children
+import { Remirror, useRemirror, useRemirrorContext } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+const EditorContent = () => {
+  const { getRootProps } = useRemirrorContext();
+  return <div {...getRootProps()} />;
+};
+
+const Toolbar = () => {
+  const { commands } = useRemirrorContext();
+  return (
+    <div>
+      <button onClick={() => commands.toggleBold()}>Bold</button>
+      <button onClick={() => commands.toggleItalic()}>Italic</button>
+    </div>
+  );
+};
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager}>
+      <Toolbar />
+      <EditorContent />
+    </Remirror>
+  );
+};
+```
+
+```tsx Auto Render Positions
+import { Remirror, useRemirror } from '@remirror/react';
+
+const EditorWithToolbar = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager} autoRender="start">
+      {/* Editor renders here (before children) */}
+      <Toolbar />
+      <Footer />
+    </Remirror>
+  );
+};
+
+const EditorWithHeader = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager} autoRender="end">
+      <Header />
+      <Toolbar />
+      {/* Editor renders here (after children) */}
+    </Remirror>
+  );
+};
+```
+
+```tsx Controlled Editor
+import { useState, useCallback } from 'react';
+import { Remirror, useRemirror } from '@remirror/react';
+import { EditorState } from '@remirror/pm/state';
+
+const ControlledEditor = () => {
+  const { manager, state, setState } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+    content: '<p>Initial content</p>',
+    stringHandler: 'html',
+  });
+  
+  const handleChange = useCallback(
+    ({ state }: { state: EditorState }) => {
+      setState(state);
+      console.log('Content changed!');
+    },
+    [setState],
+  );
+  
+  return (
+    <Remirror
+      manager={manager}
+      state={state}
+      onChange={handleChange}
+    />
+  );
+};
+```
+
+```tsx With Hooks
+import { Remirror, useRemirror } from '@remirror/react';
+
+const useEditorLogger = () => {
+  const { getState } = useRemirrorContext();
+  
+  useEffect(() => {
+    console.log('Editor state:', getState());
+  }, [getState]);
+};
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror
+      manager={manager}
+      hooks={[useEditorLogger]}
+    />
+  );
+};
+```
+
+```tsx Internationalization
+import { Remirror, useRemirror } from '@remirror/react';
+import { i18nFormat } from '@remirror/i18n';
+
+const LocalizedEditor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror
+      manager={manager}
+      i18nFormat={i18nFormat}
+      locale="es"
+      supportedLocales={['en', 'es', 'fr']}
+    />
+  );
+};
+```
+</CodeGroup>
+
+<Note>
+  When using `autoRender="start"`, the editor is rendered before child components, which helps avoid z-index issues with floating components like tooltips and menus.
+</Note>
+
+### EditorComponent
+
+The default editor placeholder component where the ProseMirror editor is rendered.
+
+```tsx File: react-remirror.tsx
+import { EditorComponent } from '@remirror/react';
+import { useRemirrorContext } from '@remirror/react';
+
+const CustomEditor = () => {
+  return (
+    <div className="editor-wrapper">
+      <EditorComponent />
+    </div>
+  );
+};
+```
+
+<Note>
+  `EditorComponent` internally uses `useRemirrorContext().getRootProps()` to attach the ProseMirror editor to the DOM.
+</Note>
+
+## Change Handlers
+
+### OnChangeJSON
+
+A component that automatically extracts JSON from the editor state on every change.
+
+<ParamField path="onChange" type="(json: RemirrorJSON) => void" required>
+  Callback function that receives the editor content as RemirrorJSON.
+</ParamField>
+
+```tsx File: on-change.tsx
+import { useState } from 'react';
+import { Remirror, OnChangeJSON, useRemirror } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+const Editor = () => {
+  const [json, setJson] = useState(null);
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <>
+      <Remirror manager={manager}>
+        <OnChangeJSON onChange={setJson} />
+      </Remirror>
+      
+      <pre>
+        {JSON.stringify(json, null, 2)}
+      </pre>
+    </>
+  );
+};
+```
+
+<Note>
+  This component returns `null` and is used purely for its side effects. It subscribes to document changes using `useDocChanged` internally.
+</Note>
+
+### OnChangeHTML
+
+A component that automatically extracts HTML from the editor state on every change.
+
+<ParamField path="onChange" type="(html: string) => void" required>
+  Callback function that receives the editor content as HTML string.
+</ParamField>
+
+```tsx File: on-change.tsx
+import { useState } from 'react';
+import { Remirror, OnChangeHTML, useRemirror } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+const Editor = () => {
+  const [html, setHtml] = useState('');
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <>
+      <Remirror manager={manager}>
+        <OnChangeHTML onChange={setHtml} />
+      </Remirror>
+      
+      <div className="preview">
+        <h3>HTML Preview:</h3>
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </>
+  );
+};
+```
+
+<Warning>
+  Both `OnChangeJSON` and `OnChangeHTML` trigger on every document change. For performance-critical applications, consider debouncing the onChange callback.
+</Warning>
+
+## Advanced Patterns
+
+### Multiple Change Handlers
+
+Combine multiple change handlers for different output formats:
+
+```tsx
+import { Remirror, OnChangeJSON, OnChangeHTML, useRemirror } from '@remirror/react';
+
+const Editor = () => {
+  const [json, setJson] = useState(null);
+  const [html, setHtml] = useState('');
+  
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager}>
+      <OnChangeJSON onChange={setJson} />
+      <OnChangeHTML onChange={setHtml} />
+      <EditorComponent />
+    </Remirror>
+  );
+};
+```
+
+### Custom Root Props
+
+Take full control over where the editor is rendered:
+
+```tsx
+import { Remirror, useRemirror, useRemirrorContext } from '@remirror/react';
+import { ComponentsTheme } from '@remirror/theme';
+
+const CustomEditorWrapper = () => {
+  const { getRootProps } = useRemirrorContext();
+  
+  return (
+    <div className="my-custom-wrapper">
+      <div
+        {...getRootProps()}
+        className={ComponentsTheme.EDITOR_WRAPPER}
+        style={{ minHeight: '300px' }}
+      />
+    </div>
+  );
+};
+
+const Editor = () => {
+  const { manager } = useRemirror({
+    extensions: () => [new WysiwygPreset()],
+  });
+  
+  return (
+    <Remirror manager={manager}>
+      <CustomEditorWrapper />
+    </Remirror>
+  );
+};
+```
+
+### Ref Composition
+
+Compose multiple refs on the editor element:
+
+```tsx
+import { useRef } from 'react';
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorWithRef = () => {
+  const myRef = useRef<HTMLDivElement>(null);
+  const { getRootProps } = useRemirrorContext();
+  
+  useEffect(() => {
+    if (myRef.current) {
+      // Access the editor DOM element
+      myRef.current.focus();
+    }
+  }, []);
+  
+  return (
+    <div {...getRootProps({ ref: myRef })} />
+  );
+};
+```
+
+### Custom Ref Key
+
+For components that use non-standard ref props:
+
+```tsx
+import { useRemirrorContext } from '@remirror/react';
+
+const EditorWithCustomRef = () => {
+  const { getRootProps } = useRemirrorContext();
+  
+  return (
+    <CustomComponent
+      {...getRootProps({ refKey: 'innerRef' })}
+    />
+  );
+};
+```
+
+## Context Providers
+
+### RemirrorContext
+
+The React context that stores the editor framework output.
+
+```tsx File: hooks/use-remirror-context.ts
+import { useContext } from 'react';
+import { RemirrorContext } from '@remirror/react';
+
+const MyComponent = () => {
+  const context = useContext(RemirrorContext);
+  
+  if (!context) {
+    throw new Error('Must be used within Remirror provider');
+  }
+  
+  return <div>Editor is ready!</div>;
+};
+```
+
+<Note>
+  Prefer using `useRemirrorContext()` hook instead of directly accessing the context with `useContext(RemirrorContext)`.
+</Note>
+
+### I18nProvider
+
+Provides internationalization support to the editor.
+
+<ParamField path="i18nFormat" type="I18nFormatter" default="defaultI18nFormatter">
+  Function that formats ICU MessageFormat encoded messages.
+</ParamField>
+
+<ParamField path="locale" type="string" default="'en'">
+  Current locale.
+</ParamField>
+
+<ParamField path="supportedLocales" type="string[]">
+  Array of supported locales. Defaults to `[locale]`.
+</ParamField>
+
+```tsx File: contexts/i18n-context.tsx
+import { I18nProvider } from '@remirror/react';
+import { i18nFormat } from '@remirror/i18n';
+
+const App = () => {
+  return (
+    <I18nProvider
+      i18nFormat={i18nFormat}
+      locale="fr"
+      supportedLocales={['en', 'fr', 'de']}
+    >
+      <Editor />
+    </I18nProvider>
+  );
+};
+```
+
+<Note>
+  The `I18nProvider` is automatically included when using the `<Remirror />` component. You only need to use it separately for custom setups.
+</Note>
+
+## Component Architecture
+
+<Steps>
+  <Step title="Provider Layer">
+    The `<Remirror />` component wraps your editor with necessary providers:
+    - `I18nProvider` for internationalization
+    - `RemirrorContext.Provider` for editor state
+  </Step>
+  
+  <Step title="Portal Management">
+    Remirror automatically manages React portals for floating elements:
+    - Tooltips
+    - Menus
+    - Suggestions
+  </Step>
+  
+  <Step title="Hook Execution">
+    Custom hooks are executed in the order provided via the `hooks` prop.
+  </Step>
+  
+  <Step title="Editor Rendering">
+    The editor is rendered based on `autoRender` configuration or when `<EditorComponent />` is used.
+  </Step>
+</Steps>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Auto Render Position" icon="arrow-up-1-9">
+    Use `autoRender="start"` to avoid z-index issues with floating components.
+  </Card>
+  
+  <Card title="Controlled vs Uncontrolled" icon="sliders">
+    Use controlled mode only when you need to synchronize editor state with external state.
+  </Card>
+  
+  <Card title="Change Handlers" icon="bolt">
+    Use `OnChangeJSON` and `OnChangeHTML` components for cleaner code instead of manual extraction.
+  </Card>
+  
+  <Card title="Ref Management" icon="link">
+    Compose refs using the `getRootProps({ ref })` pattern for accessing the editor DOM.
+  </Card>
+</CardGroup>
+
+## TypeScript Support
+
+All components are fully typed with TypeScript generics:
+
+```tsx
+import { Remirror, RemirrorProps } from '@remirror/react';
+import { WysiwygPreset } from 'remirror/extensions';
+
+type MyEditorProps = RemirrorProps<WysiwygPreset>;
+
+const Editor = (props: MyEditorProps) => {
+  return <Remirror {...props} />;
+};
+```
