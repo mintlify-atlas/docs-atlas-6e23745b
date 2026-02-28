@@ -1,0 +1,166 @@
+{
+  "projectType": "framework",
+  "projectName": "Remirror",
+  "projectDescription": "A React toolkit for building cross-platform rich text editors based on ProseMirror",
+  "theme": "palm",
+  "primaryColor": "#7963d2",
+  "lightColor": "#9b8ee3",
+  "darkColor": "#5a47a3",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/extensions",
+              "concepts/presets",
+              "concepts/manager",
+              "concepts/state-management"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building-custom-editor",
+              "guides/working-with-extensions",
+              "guides/styling",
+              "guides/collaboration",
+              "guides/controlled-editor",
+              "guides/static-rendering"
+            ]
+          },
+          {
+            "group": "React Integration",
+            "pages": [
+              "react/hooks",
+              "react/components",
+              "react/context"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/commands",
+              "advanced/plugins",
+              "advanced/schemas",
+              "advanced/node-views"
+            ]
+          },
+          {
+            "group": "Migration",
+            "pages": [
+              "migration/v2-to-v3",
+              "migration/v1-to-v2"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/core/manager",
+              "api/core/extension",
+              "api/core/commands",
+              "api/core/helpers"
+            ]
+          },
+          {
+            "group": "React",
+            "pages": [
+              "api/react/hooks",
+              "api/react/components",
+              "api/react/remirror-component",
+              "api/react/context"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "api/extensions/overview",
+              "api/extensions/text-formatting",
+              "api/extensions/block-elements",
+              "api/extensions/lists",
+              "api/extensions/tables",
+              "api/extensions/collaboration",
+              "api/extensions/markdown",
+              "api/extensions/code"
+            ]
+          },
+          {
+            "group": "Presets",
+            "pages": [
+              "api/presets/core",
+              "api/presets/formatting",
+              "api/presets/wysiwyg",
+              "api/presets/react"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Community",
+            "pages": [
+              "resources/contributing",
+              "resources/faq",
+              "resources/showcase"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Extension-based architecture for modular editor construction",
+    "40+ built-in extensions for text formatting, lists, tables, collaboration, and more",
+    "Pre-configured presets (WYSIWYG, formatting, core) for rapid development",
+    "Comprehensive React hooks and components for seamless integration",
+    "TypeScript-first with full type safety",
+    "Accessibility (A11y) focused and ARIA compatible",
+    "Internationalization (I18n) support via Lingui",
+    "Real-time collaborative editing with Yjs integration",
+    "Mobile and cross-platform support",
+    "ProseMirror integration with simplified API"
+  ],
+  "publicApiSurface": [
+    "useRemirror - Main hook for creating editor instance",
+    "Remirror - Root React component",
+    "OnChangeJSON - Component for tracking editor state changes as JSON",
+    "OnChangeHTML - Component for tracking editor state changes as HTML",
+    "BoldExtension - Extension for bold text formatting",
+    "ItalicExtension - Extension for italic text formatting",
+    "UnderlineExtension - Extension for underline text formatting",
+    "HeadingExtension - Extension for headings",
+    "LinkExtension - Extension for links",
+    "ListExtension - Extension for ordered and unordered lists",
+    "TableExtension - Extension for tables",
+    "CodeBlockExtension - Extension for code blocks",
+    "CollaborationExtension - Extension for real-time collaboration",
+    "MarkdownExtension - Extension for Markdown support",
+    "useCommands - Hook for accessing editor commands",
+    "useChainedCommands - Hook for chaining multiple commands",
+    "useActive - Hook for checking active marks/nodes",
+    "useHelpers - Hook for accessing editor helpers",
+    "useEditorState - Hook for accessing editor state",
+    "createReactManager - Function to create editor manager",
+    "WysiwygPreset - Preset for WYSIWYG editors",
+    "FormattingPreset - Preset for text formatting",
+    "CorePreset - Core preset with essential functionality"
+  ]
+}
